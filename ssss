@@ -1,205 +1,24 @@
-了解！原來你不需要產出一個新的 Excel 檔案，而是希望程式直接在畫面（終端機）或是一個 .log 文字檔中，清清楚楚地告訴你哪一列、哪一個欄位有問題。
-這樣改寫後，程式的速度會更快，因為不需要去處理複雜的 Excel 重新繪圖、上色和隱藏欄位，只需要讀取資料、跑邏輯、然後把不符合規則的資料記錄下來。
-### 調整後的 Python 完整程式碼 (check_data.py)
-這個版本執行後，會同時在**終端機畫面顯示摘要**，並在同目錄下自動產生一個詳細的 validation_report.log 檔案。
-```python
-import os
-import sys
-import argparse
-import pandas as pd
-from openpyxl import load_workbook
+D:\1141923\python>python check_data.py mike.xlsx
+--> 開始讀取檔案: mike.xlsx
+Traceback (most recent call last):
+  File "C:\python-3.13.9-win-x64\x64\Lib\site-packages\pandas\core\indexes\range.py", line 521, in get_loc
+    return self._range.index(new_key)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^
+ValueError: 0 is not in range
 
-def parse_arguments():
-    """解析命令列參數"""
-    parser = argparse.ArgumentParser(description="Data 頁面資料純邏輯檢核工具（輸出 Log）")
-    parser.add_argument("input_file", help="輸入的 Excel 檔案路徑 (例如: data.xlsx)")
-    return parser.parse_args()
+The above exception was the direct cause of the following exception:
 
-def main():
-    args = parse_arguments()
-    input_file = args.input_file
-    
-    if not os.path.exists(input_file):
-        print(f"錯誤: 找不到檔案 {input_file}")
-        sys.exit(1)
-
-    print(f"--> 開始讀取檔案: {input_file}")
-    
-    # 1. 檢查工作表是否存在
-    try:
-        xl = pd.ExcelFile(input_file)
-    except Exception as e:
-        print(f"錯誤: 無法讀取 Excel 檔案 ({e})")
-        sys.exit(1)
-        
-    if "Data" not in xl.sheet_names or "Code" not in xl.sheet_names:
-        print("錯誤: 檔案必須包含 'Data' 與 'Code' 工作表")
-        sys.exit(1)
-
-    # 2. 讀取 Code 工作表作為比對基準 (pandas 速度快)
-    df_code = pd.read_excel(input_file, sheet_name="Code", header=None)
-    code_a = set(df_code[0].dropna().astype(str).get_values() if hasattr(df_code[0], 'get_values') else df_code[0].dropna().astype(str).tolist())
-    code_b = set(df_code[1].dropna().astype(str).tolist())
-    code_c = set(df_code[2].dropna().astype(str).tolist())
-    code_d = set(df_code[3].dropna().astype(str).tolist())
-
-    # 3. 使用 openpyxl 讀取 Data 頁面 (因為要判定字體顏色是否為正紅)
-    wb = load_workbook(input_file, data_only=True)
-    ws = wb["Data"]
-
-    # 模擬 VBA 刪除 A:B 欄的行為：
-    # 原本的 C欄 變成 A欄, D欄 變成 B欄... 依此類推。
-    # 為了讓你對照原本的規則，我們用「刪除 A:B 欄後的新欄位代號」來處理邏輯。
-    # 新 A欄(原C)、新 B欄(原D)... 新 V欄(原X)... 新 AA欄(原AC)...
-    
-    ws.delete_cols(1, 2)
-    max_row = ws.max_row
-    
-    # 檢查資料筆數是否足夠 (A4 必須有值)
-    if max_row < 4 or ws["A4"].value is None:
-        print("錯誤: 請輸入至少三筆資料（A4 為空或筆數不足）")
-        sys.exit(1)
-
-    # 準備記錄 log 內容
-    log_lines = []
-    log_lines.append("==================================================")
-    log_lines.append(f" Excel 資料檢核報告 - 來源檔案: {input_file}")
-    log_lines.append("==================================================")
-    
-    error_count = 0
-    warning_count = 0
-
-    # 預先抓出所有 CustomerNo 用於重複檢查 (新 A 欄即原 C 欄)
-    c_values = [str(ws.cell(row=r, column=1).value).strip() for r in range(4, max_row + 1) if ws.cell(row=r, column=1).value is not None]
-
-    print("--> 正在比對邏輯中...")
-    
-    # 從第 2 列開始檢查到最後一列
-    for i in range(2, max_row + 1):
-        row_errors = []
-        row_warnings = []
-        excel_row_num = i  # 實際在 Excel 的列號
-        
-        # 輔助函式：檢查顏色是否為正紅 (FFFF0000)
-        def is_red_font(cell):
-            if cell.font and cell.font.color and cell.font.color.rgb == "FFFF0000":
-                return True
-            return False
-
-        # --- 1. CustomerNo 檢查 (新 A 欄 / 原 C 欄) ---
-        c_cell = ws.cell(row=i, column=1)
-        c_val = str(c_cell.value).strip() if c_cell.value is not None else ""
-        
-        if i >= 4 and c_val != "":
-            if c_values.count(c_val) > 1:
-                row_errors.append(f"[CustomerNo 重複] 值: {c_val} (藍底標記)")
-            else:
-                # 格式檢核：不含換行、長度11、首尾為0
-                if "\n" in c_val or len(c_val) != 11 or not (c_val.startswith("0") and c_val.endswith("0")):
-                    row_errors.append(f"[CustomerNo 格式錯誤] 值: {c_val} (不滿11碼、含換行或首尾非0)")
-        elif i >= 4 and c_val == "":
-            row_errors.append("[CustomerNo 錯誤] 欄位為空")
-
-        # 輔助檢查代碼函式 (適用於 X, Y, Z, AA, AB, AJ 欄)
-        # 注意：因為刪除了 A,B 兩欄，原本的欄位字母要往前推 2 欄
-        # X(24) -> V(22), Y(25) -> W(23), Z(26) -> X(24), AA(27) -> Y(25), AB(28) -> Z(26), AJ(36) -> AH(34)
-        def check_code_field(col_idx, original_label, code_set, is_prefix=False):
-            cell = ws.cell(row=i, column=col_idx)
-            val = str(cell.value).strip() if cell.value is not None else ""
-            if is_prefix:
-                val = val[:4]
-                
-            if is_red_font(cell):
-                if val not in code_set:
-                    row_errors.append(f"[{original_label} 錯誤] 紅字代碼不存在於 Code 表中，值: {val}")
-            # 黑字直接過，不紀錄
-
-        check_code_field(22, "出生地國家(X欄)", code_a)
-        check_code_field(23, "永久住址國家(Y欄)", code_a)
-        check_code_field(24, "郵寄地址國家(Z欄)", code_a)
-        check_code_field(25, "Occup(AA欄)", code_b, is_prefix=True)
-        check_code_field(26, "JobTitle(AB欄)", code_c, is_prefix=True)
-
-        # --- 2. 任職機構檢查 (新 AA 欄 / 原 AC 欄 -> 第 27 欄) ---
-        ac_cell = ws.cell(row=i, column=27)
-        ac_val = str(ac_cell.value) if ac_cell.value is not None else ""
-        
-        if is_red_font(ac_cell):
-            if ac_cell.value is None or ac_val.strip() == "":
-                row_errors.append("[任職機構(AC欄) 錯誤] 紅字且欄位為空")
-            elif "'" in ac_val and "\n" not in ac_val:
-                row_warnings.append(f"[任職機構(AC欄) 警告] 有單引號且無換行，值: {ac_val} (黃底標記)")
-            elif "'" not in ac_val and "\n" not in ac_val:
-                pass # 綠底正常
-            else:
-                row_errors.append(f"[任職機構(AC欄) 錯誤] 不符合常規規格，值: {ac_val}")
-
-        # --- 3. 開戶目的檢查 (新 AH 欄 / 原 AJ 欄 -> 第 34 欄) ---
-        check_code_field(34, "開戶目的(AJ欄)", code_d)
-
-        # --- 4. 審核結果檢查 (新 AJ 欄 / 原 AL 欄 -> 第 36 欄) ---
-        al_cell = ws.cell(row=i, column=36)
-        al_val = str(al_cell.value) if al_cell.value is not None else ""
-        
-        if al_cell.value is None or al_val.strip() == "":
-            row_errors.append("[審核結果(AL欄) 錯誤] 欄位為空")
-        elif "'" in al_val or "\n" in al_val or al_val.startswith(" ") or al_val.endswith(" "):
-            row_errors.append(f"[審核結果(AL欄) 錯誤] 含單引號、換行或前後有空格，值: '{al_val}'")
-
-        # 彙整這一列的結果
-        if row_errors or row_warnings:
-            log_lines.append(f"第 {excel_row_num} 列:")
-            for err in row_errors:
-                log_lines.append(f"  ❌ 錯誤: {err}")
-                error_count += 1
-            for warn in row_warnings:
-                log_lines.append(f"  ⚠️ 警告: {warn}")
-                warning_count += 1
-
-    # 結束統計
-    log_lines.append("==================================================")
-    log_lines.append(f" 檢核結束。共發現 {error_count} 個錯誤，{warning_count} 個警告。")
-    log_lines.append("==================================================")
-
-    # 輸出到終端機
-    print("\n".join(log_lines))
-    
-    # 輸出到 log 檔案
-    log_file = "validation_report.log"
-    with open(log_file, "w", encoding="utf-8") as f:
-        f.write("\n".join(log_lines))
-        
-    print(f"\n--> 詳細檢核結果已同步寫入日誌檔: {os.path.abspath(log_file)}")
-
-if __name__ == "__main__":
+Traceback (most recent call last):
+  File "D:\1141923\python\check_data.py", line 175, in <module>
     main()
+    ~~~~^^
+  File "D:\1141923\python\check_data.py", line 41, in main
+    code_a = set(df_code[0].dropna().astype(str).get_values() if hasattr(df_code[0], 'get_values') else df_code[0].dropna().astype(str).tolist())
+                                                                         ~~~~~~~^^^
+  File "C:\python-3.13.9-win-x64\x64\Lib\site-packages\pandas\core\frame.py", line 4378, in __getitem__
+    indexer = self.columns.get_loc(key)
+  File "C:\python-3.13.9-win-x64\x64\Lib\site-packages\pandas\core\indexes\range.py", line 523, in get_loc
+    raise KeyError(key) from err
+KeyError: 0
 
-```
-### 如何執行與看結果？
-只要在終端機輸入你的 Excel 檔案路徑：
-```bash
-python check_data.py mydata.xlsx
-
-```
-#### 終端機與 Log 輸出效果範例：
-```text
---> 開始讀取檔案: mydata.xlsx
---> 正在比對邏輯中...
-==================================================
- Excel 資料檢核報告 - 來源檔案: mydata.xlsx
-==================================================
-第 4 列:
-  ❌ 錯誤: [CustomerNo 重複] 值: 01234567890 (藍底標記)
-第 12 列:
-  ❌ 錯誤: [出生地國家(X欄) 錯誤] 紅字代碼不存在於 Code 表中，值: USA
-第 15 列:
-  ⚠️ 警告: [任職機構(AC欄) 警告] 有單引號且無換行，值: '台積電 (黃底標記)
-第 22 列:
-  ❌ 錯誤: [審核結果(AL欄) 錯誤] 含單引號、換行或前後有空格，值: '核准 '
-==================================================
- 檢核結束。共發現 3 個錯誤， 1 個警告。
-==================================================
-
---> 詳細檢核結果已同步寫入日誌檔: /path/to/validation_report.log
-
-```
+D:\1141923\python>
