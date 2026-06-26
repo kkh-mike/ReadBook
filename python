@@ -1,0 +1,305 @@
+檢查項目	欄位	檢查邏輯	判定結果/顏色
+執行頁面是否正確	ActiveSheet	只能在 Data 頁面執行，否則跳出訊息	非 Data：訊息「請於Data頁面執行」
+資料筆數是否足夠	A欄資料列數	若 A4 為空，或 A2 往下抓到工作表底部，視為資料不足	跳出訊息「請輸入至少三筆資料」
+是否有舊的輔助欄位	D欄、AD欄	若 D1 = CustomerNo 用這行篩選，且 AD1 = 任職機構 用這行篩選，就先刪掉舊輔助欄	避免重複插入欄位
+字體顏色統一	全資料區	除了正紅字外，其他字體顏色全部改成黑色	非紅字改黑字
+CustomerNo 欄位格式	C欄	將 C 欄設為文字格式	避免編號被 Excel 自動轉格式
+CustomerNo 是否重複	C欄	用 CountIf 檢查 C4 到最後一列，若 CustomerNo 重複則標示	重複：藍底
+CustomerNo 格式是否合法	C欄	若非重複，進一步檢查：1. 不含換行 2. 長度=11 3. 想要檢查首尾是否為 0，但這段寫法有問題	合格：綠底 + D欄=True；不合格：紅底 + D欄=False
+CustomerNo 篩選輔助欄	D欄	新增 D 欄作為 CustomerNo 檢核結果欄	True/False 並同步上色
+出生地國家代碼是否存在	X欄	到 Code 工作表 A欄做 VLookup，比對欄位值是否存在	黑字：直接綠底；紅字且查得到：綠底；其他：紅底
+永久住址國家代碼是否存在	Y欄	到 Code 工作表 A欄做 VLookup	黑字：綠底；紅字且查得到：綠底；其他：紅底
+郵寄地址國家代碼是否存在	Z欄	到 Code 工作表 A欄做 VLookup	黑字：綠底；紅字且查得到：綠底；其他：紅底
+Occup 代碼是否存在	AA欄	取前四碼，到 Code 工作表 B欄比對	黑字：綠底；紅字且查得到：綠底；其他：紅底
+JobTitle 代碼是否存在	AB欄	取前四碼，到 Code 工作表 C欄比對	黑字：綠底；紅字且查得到：綠底；其他：紅底
+任職機構欄位內容檢查	AC欄	依字體顏色、是否空白、是否含單引號、是否含換行做判斷	黑字：綠底 + AD=True；空白：紅底 + False；有單引號且無換行：黃底 + False；無單引號且無換行：綠底 + True；其他：紅底 + False
+任職機構篩選輔助欄	AD欄	新增 AD 欄作為任職機構檢核結果欄	True/False 並同步上色
+開戶目的代碼是否存在	AJ欄	到 Code 工作表 D欄做 VLookup	黑字：綠底；紅字且查得到：綠底；其他：紅底
+審核結果欄位是否合法	AL欄	檢查是否空白、是否含單引號、是否含換行、前後是否有空格	空白：紅底；內容乾淨：綠底；其他：紅底
+表頭標示	D1、X1、Y1、Z1、AA1、AB1、AD1、AJ1、AL1、C1、AC1	將重點檢核欄位表頭上色	方便人工辨識
+篩選與欄位隱藏	多欄位	開啟 AutoFilter，並隱藏非重點欄位	方便後續人工篩選
+
+
+我目前是用db 做這個
+Sub Check_Data()
+
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    Application.EnableEvents = False
+    Application.DisplayStatusBar = False
+    
+    '確認執行頁面
+    If ActiveSheet.Name <> "Data" Then
+        MsgBox "請於Data頁面執行", , "頁面錯誤"
+        Range("A1").Select
+        Exit Sub
+    Else
+    
+    Columns("A:B").Delete
+    
+        '確認資料總筆數
+        Sheets("Data").Select
+        Range("A2").Select
+        Dim RowCount
+        RowCount = Sheets("Data").Range("A2").End(xlDown).Row
+        Dim ColCount
+        ColCount = Sheets("Data").Range("A1").End(xlToRight).Column
+        
+        If Range("A4").Value = "" Or RowCount = 1048576 Then
+            MsgBox "請輸入至少三筆資料", , "筆數不足"
+            Range("A1").Select
+            Exit Sub
+        End If
+        
+        '刪除新增兩欄資料
+        If Range("D1").Value = "CustomerNo" & vbNewLine & "用這行篩選" And Range("AD1").Value = "任職機構" & vbNewLine & "用這行篩選" Then
+            Range("D:D").EntireColumn.Delete
+            Range("AC:AC").EntireColumn.Delete
+        End If
+        
+        '內容顏色非正紅色一律調整為黑色
+        For i = 2 To RowCount
+            For j = 1 To ColCount
+                If Cells(i, j).Font.Color <> RGB(255, 0, 0) Then
+                    Cells(i, j).Font.Color = RGB(0, 0, 0)
+                End If
+            Next
+        Next
+        
+        'CustomerNo
+        Columns("C:C").Select
+        Selection.NumberFormatLocal = "@"
+        '新增一列篩選
+        Range("D1").EntireColumn.Insert
+        Range("D1").Value = "CustomerNo" & vbNewLine & "用這行篩選"
+        
+        '有重複CustomerNo >> 藍底
+        Dim rng As Range
+        For Each rng In Range("C2:C" & RowCount)
+            If rng = Empty Then
+                Exit For
+            End If
+            k = Application.CountIf(Range("C4:C" & RowCount), rng)
+            If k > 1 Then
+                rng.Interior.Color = RGB(200, 240, 255)
+            End If
+        Next
+        
+        For i = 2 To (RowCount)
+            '排除藍底
+            If Range("C" & i).Interior.Color = RGB(200, 240, 255) Then
+                Range("D" & i).Interior.Color = RGB(200, 240, 255)
+                Range("D" & i).Value = "False"
+            '無換行符號 & 最後一個字元為0 & 總長度11 >> 綠底
+            ElseIf InStr(Range("C" & i), Chr(10)) = 0 And Mid(Range("C" & i), 1, 1) = Right(Range("C" & i), 1) = 0 And Len(Range("C" & i)) = 11 Then
+                Range("C" & i).Interior.Color = RGB(200, 245, 200)
+                Range("D" & i).Value = "True"
+                Range("D" & i).Interior.Color = RGB(200, 245, 200)
+            '其餘一律紅底
+            Else
+                Range("C" & i).Interior.Color = RGB(255, 160, 160)
+                Range("D" & i).Value = "False"
+                Range("D" & i).Interior.Color = RGB(255, 160, 160)
+            End If
+        Next
+        
+        '出生地國家
+        For i = 2 To (RowCount)
+            '欄位內容有無在Code工作表A行 >> 無>Error
+            CheBir = WorksheetFunction.IfError(Application.VLookup(Range("X" & i), Worksheets("Code").Range("A:A"), 1, False), "Error")
+            '黑字一律綠底 >> 不檢核黑字
+            If Range("X" & i).Font.Color = RGB(0, 0, 0) Then
+                Range("X" & i).Interior.Color = RGB(200, 245, 200)
+            '紅字 + 檢核內容後不等於Error >> 綠底
+            ElseIf Range("X" & i).Font.Color = RGB(255, 0, 0) And CheBir <> "Error" Then
+                Range("X" & i).Interior.Color = RGB(200, 245, 200)
+            '其餘一律紅底
+            Else
+                Range("X" & i).Interior.Color = RGB(255, 160, 160)
+            End If
+        Next
+        
+        '永久住址國家
+        For i = 2 To (RowCount)
+            '欄位內容有無在Code工作表A行 >> 無>Error
+            CheAddr = WorksheetFunction.IfError(Application.VLookup(Range("Y" & i), Worksheets("Code").Range("A:A"), 1, False), "Error")
+            '黑字一律綠底 >> 不檢核黑字
+            If Range("Y" & i).Font.Color = RGB(0, 0, 0) Then
+                Range("Y" & i).Interior.Color = RGB(200, 245, 200)
+            '紅字 + 檢核內容後不等於Error >> 綠底
+            ElseIf Range("Y" & i).Font.Color = RGB(255, 0, 0) And CheAddr <> "Error" Then
+                Range("Y" & i).Interior.Color = RGB(200, 245, 200)
+            '其餘一律紅底
+            Else
+                Range("Y" & i).Interior.Color = RGB(255, 160, 160)
+            End If
+        Next
+        
+        '郵寄地址國家
+        For i = 2 To (RowCount)
+            '欄位內容有無在Code工作表A行 >> 無>Error
+            CheMail = WorksheetFunction.IfError(Application.VLookup(Range("Z" & i), Worksheets("Code").Range("A:A"), 1, False), "Error")
+            '黑字一律綠底 >> 不檢核黑字
+            If Range("Z" & i).Font.Color = RGB(0, 0, 0) Then
+                Range("Z" & i).Interior.Color = RGB(200, 245, 200)
+            '紅字 + 檢核內容後不等於Error >> 綠底
+            ElseIf Range("Z" & i).Font.Color = RGB(255, 0, 0) And CheMail <> "Error" Then
+                Range("Z" & i).Interior.Color = RGB(200, 245, 200)
+            '其餘一律紅底
+            Else
+                Range("Z" & i).Interior.Color = RGB(255, 160, 160)
+            End If
+        Next
+        
+        'Occup
+        For i = 2 To (RowCount)
+            '欄位內容前四碼有無在Code工作表B行 >> 無>Error
+            CheOcc = WorksheetFunction.IfError(Application.VLookup(Left(Range("AA" & i), 4), Worksheets("Code").Range("B:B"), 1, False), "Error")
+            '黑字一律綠底 >> 不檢核黑字
+            If Range("AA" & i).Font.Color = RGB(0, 0, 0) Then
+                Range("AA" & i).Interior.Color = RGB(200, 245, 200)
+            '紅字 + 檢核內容後不等於Error >> 綠底
+            ElseIf Range("AA" & i).Font.Color = RGB(255, 0, 0) And CheOcc <> "Error" Then
+                Range("AA" & i).Interior.Color = RGB(200, 245, 200)
+            '其餘一律紅底
+            Else
+                Range("AA" & i).Interior.Color = RGB(255, 160, 160)
+            End If
+        Next
+        
+        'JobTitle
+        For i = 2 To (RowCount)
+            '欄位內容前四碼有無在Code工作表C行 >> 無>Error
+            CheJob = WorksheetFunction.IfError(Application.VLookup(Left(Range("AB" & i), 4), Worksheets("Code").Range("C:C"), 1, False), "Error")
+            '黑字一律綠底 >> 不檢核黑字
+            If Range("AB" & i).Font.Color = RGB(0, 0, 0) Then
+                Range("AB" & i).Interior.Color = RGB(200, 245, 200)
+            '紅字 + 檢核內容後不等於Error >> 綠底
+            ElseIf Range("AB" & i).Font.Color = RGB(255, 0, 0) And CheJob <> "Error" Then
+                Range("AB" & i).Interior.Color = RGB(200, 245, 200)
+            '其餘一律紅底
+            Else
+                Range("AB" & i).Interior.Color = RGB(255, 160, 160)
+            End If
+        Next
+        
+        'ServingEntity
+        '新增一列篩選
+        Range("AD1").EntireColumn.Insert
+        Columns("AD:AD").NumberFormatLocal = "@"
+        Range("AD1").Value = "任職機構" & vbNewLine & "用這行篩選"
+        
+        For i = 2 To (RowCount)
+            '黑字一律綠底 >> 不檢核黑字
+            If Range("AC" & i).Font.Color = RGB(0, 0, 0) Then
+                Range("AC" & i).Interior.Color = RGB(200, 245, 200)
+                Range("AD" & i).Value = "True"
+                Range("AD" & i).Interior.Color = RGB(200, 245, 200)
+            '紅字 + 欄位為空 >> 紅底
+            ElseIf Range("AC" & i).Font.Color = RGB(255, 0, 0) And Range("AC" & i) = "" Then
+                Range("AC" & i).Interior.Color = RGB(255, 160, 160)
+                Range("AD" & i).Value = "False"
+                Range("AD" & i).Interior.Color = RGB(255, 160, 160)
+            '紅字 + 有單引號 + 無換行符號 >> 黃底
+            ElseIf Range("AC" & i).Font.Color = RGB(255, 0, 0) And InStr(Range("AC" & i), "'") <> 0 And InStr(Range("AC" & i), Chr(10)) = 0 Then 'And Mid(Range("AC" & i), 1, 1) <> " " And Right(Range("AC" & i), 1) <> " " Then
+                Range("AC" & i).Interior.Color = RGB(255, 200, 125)
+                Range("AD" & i).Value = "False"
+                Range("AD" & i).Interior.Color = RGB(255, 200, 125)
+            '紅字 + 無單引號 + 無換行符號 >> 綠底
+            ElseIf Range("AC" & i).Font.Color = RGB(255, 0, 0) And InStr(Range("AC" & i), "'") = 0 And InStr(Range("AC" & i), Chr(10)) = 0 Then 'And Mid(Range("AC" & i), 1, 1) <> " " And Right(Range("AC" & i), 1) <> " " Then
+                Range("AC" & i).Interior.Color = RGB(200, 245, 200)
+                Range("AD" & i).Value = "True"
+                Range("AD" & i).Interior.Color = RGB(200, 245, 200)
+            '其餘一律紅底
+            Else
+                Range("AC" & i).Interior.Color = RGB(255, 160, 160)
+                Range("AD" & i).Value = "False"
+                Range("AD" & i).Interior.Color = RGB(255, 160, 160)
+            End If
+        Next
+        
+        '開戶目的
+        For i = 2 To (RowCount)
+            '欄位內容前四碼有無在Code工作表D行 >> 無>Error
+            CheBir = WorksheetFunction.IfError(Application.VLookup(Range("AJ" & i) & "", Worksheets("Code").Range("D:D"), 1, False), "Error")
+            '黑字一律綠底 >> 不檢核黑字
+            If Range("AJ" & i).Font.Color = RGB(0, 0, 0) Then
+                Range("AJ" & i).Interior.Color = RGB(200, 245, 200)
+            '紅字 + 檢核內容後不等於Error >> 綠底
+            ElseIf Range("AJ" & i).Font.Color = RGB(255, 0, 0) And CheBir <> "Error" Then
+                Range("AJ" & i).Interior.Color = RGB(200, 245, 200)
+            '其餘一律紅底
+            Else
+                Range("AJ" & i).Interior.Color = RGB(255, 160, 160)
+            End If
+        Next
+        
+        '審核結果
+        For i = 2 To (RowCount)
+            '欄位為空 >> 紅底
+            If Range("AL" & i) = "" Then
+                Range("AL" & i).Interior.Color = RGB(255, 160, 160)
+            '無單引號 + 無換行符號 + 前後無空格 >> 綠底
+            ElseIf InStr(Range("AL" & i), "'") = 0 And InStr(Range("AL" & i), Chr(10)) = 0 And Mid(Range("AL" & i), 1, 1) <> " " And Right(Range("AL" & i), 1) <> " " Then
+                Range("AL" & i).Interior.Color = RGB(200, 245, 200)
+            '其餘一律紅底
+            Else
+                Range("AL" & i).Interior.Color = RGB(255, 160, 160)
+            End If
+        Next
+        
+        '調整顏色D1、X1、Y1、Z1、AA1、AB1、AD1、AJ1、AL1
+        Range("D1").Font.Color = RGB(255, 0, 0)
+        Range("X1").Font.Color = RGB(255, 0, 0)
+        Range("Y1").Font.Color = RGB(255, 0, 0)
+        Range("Z1").Font.Color = RGB(255, 0, 0)
+        Range("AA1").Font.Color = RGB(255, 0, 0)
+        Range("AB1").Font.Color = RGB(255, 0, 0)
+        Range("AD1").Font.Color = RGB(255, 0, 0)
+        Range("AJ1").Font.Color = RGB(255, 0, 0)
+        Range("AL1").Font.Color = RGB(255, 0, 0)
+        Range("D1").Interior.Color = RGB(255, 240, 220)
+        Range("X1").Interior.Color = RGB(255, 240, 220)
+        Range("Y1").Interior.Color = RGB(255, 240, 220)
+        Range("Z1").Interior.Color = RGB(255, 240, 220)
+        Range("AA1").Interior.Color = RGB(255, 240, 220)
+        Range("AD1").Interior.Color = RGB(255, 240, 220)
+        Range("AB1").Interior.Color = RGB(255, 240, 220)
+        Range("AJ1").Interior.Color = RGB(255, 240, 220)
+        Range("AL1").Interior.Color = RGB(255, 240, 220)
+        
+        Range("C1").Font.Color = RGB(255, 0, 0)
+        Range("AC1").Font.Color = RGB(0, 0, 0)
+        Range("C1").Interior.Color = RGB(255, 240, 220)
+        Range("AC1").Interior.Color = RGB(255, 240, 220)
+        
+        '開啟篩選＆隱藏無用欄位
+        Sheets("Data").Select
+        Sheets("Data").AutoFilterMode = False
+        Range("A1").Select
+        Selection.AutoFilter
+        Columns("B:B").Hidden = True
+        Columns("E:W").Hidden = True
+        Columns("AE:AI").Hidden = True
+        Columns("AK:AK").Hidden = True
+        Columns("AM:BF").Hidden = True
+    End If
+    
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    Application.EnableEvents = True
+    Application.DisplayStatusBar = True
+    
+End Sub
+
+
+
+
+
+我想用python 直接做檢查輸出
+
+怎麼寫
+
+
+
+
