@@ -1,31 +1,55 @@
-pacs00
+好的，我看到你給的 pacs00 表結構了。
+這張表主要是接收 PACS.008 的原始訊息（RawMessage 存的是完整的 MX 格式），但False Hit 的紀錄不在這張表，而是在 AML Screening 的 Log 表。
+目前建議的查詢方式：
+Step 1：先找出跟 pacs008 有關的 AML Hit 紀錄
+-- 查最近 False Hit 的 pacs008 交易
+SELECT TOP 100
+    p.ID,
+    p.ClientReferenceNo,
+    p.Channel,
+    p.CreatedDate,
+    p.RawMessage,                     -- 這很大，要小心
+    a.Hit_Result,                     -- False / True
+    a.Detected_Name,
+    a.Rule_ID,
+    a.Rule_Name,
+    a.Manual_Action                   -- 看是不是 'Not Match'
+FROM pacs00 p
+LEFT JOIN AML_Screening_Log a          -- ← 改成實際的 AML Log 表名
+       ON p.ClientReferenceNo = a.Transaction_Ref 
+      OR p.ID = a.Original_Message_ID   -- 看實際 join key
+WHERE p.CreatedDate >= '2026-06-15'
+  AND p.ClientReferenceNo LIKE '%pacs.008%'
+ORDER BY p.CreatedDate DESC;
 
-Column_name	Type	Computed	Length	Prec	Scale	Nullable	TrimTrailingBlanks	FixedLenNullInSource	Collation
-ID	uniqueidentifier	no	16	     	     	no	(n/a)	(n/a)	NULL
-BankNo	nvarchar	no	6	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
-BranchNo	nvarchar	no	60	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
-ClientReferenceNo	nvarchar	no	80	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
-ClientMessageTypeCode	nvarchar	no	60	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
-RawMessage	nvarchar	no	-1	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
-SourceID	nvarchar	no	60	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
-Channel	nvarchar	no	60	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
-Priority	int	no	4	10   	0    	yes	(n/a)	(n/a)	NULL
-CreatedDate	datetime2	no	8	27   	7    	no	(n/a)	(n/a)	NULL
-IsCompleted	bit	no	1	     	     	no	(n/a)	(n/a)	NULL
-CompletedDate	datetime2	no	8	27   	7    	yes	(n/a)	(n/a)	NULL
-Progress	varchar	no	20	     	     	no	no	no	Chinese_Taiwan_Stroke_CI_AS
-IsFeedBackSend	bit	no	1	     	     	no	(n/a)	(n/a)	NULL
-FeedBackSendDate	datetime2	no	8	27   	7    	yes	(n/a)	(n/a)	NULL
-TerminalId	varchar	no	50	     	     	yes	no	yes	Chinese_Taiwan_Stroke_CI_AS
-LastUpdatedDate	datetime2	no	8	27   	7    	yes	(n/a)	(n/a)	NULL
+Step 2：如果不知道 AML Log 表名，先找表
+SELECT table_name 
+FROM information_schema.tables 
+WHERE (table_name LIKE '%aml%' 
+    OR table_name LIKE '%screen%' 
+    OR table_name LIKE '%hit%' 
+    OR table_name LIKE '%patriot%')
+ORDER BY table_name;
 
+Step 3：如果 RawMessage 裡面有 Hit 資訊（備用方案）
+-- 在 RawMessage 裡搜尋 False Hit 相關文字
+SELECT 
+    ClientReferenceNo,
+    CreatedDate,
+    RawMessage
+FROM pacs00
+WHERE CreatedDate >= '2026-06-20'
+  AND (RawMessage LIKE '%False Hit%' 
+    OR RawMessage LIKE '%false hit%' 
+    OR RawMessage LIKE '%Not Match%')
+ORDER BY CreatedDate DESC;
 
-ClientReferenceNo = pacs.008.001.08
-
-按會上溝通，有見AML False Hit問題日益嚴重，有勞協助反映及處理。以減低系統False Hit人工處理比率。
-自SWIFT MX 上綫後，AML 系統中False hit情況倍增，不論PACS.008/009，大部分交易都會出現在AML 系統並False hit需OP Maker 和Checker 人工放行。
-以下以最近一周False hit筆數供貴組參考：
-
-
-
-我要怎麼查阿
+最有效率的做法（推薦現在做）：
+	1	先跑 Step 1 的 information_schema.tables 找出 AML 相關的表格名稱。
+	2	把表名告訴我（例如 AML_Hit_Log、Patriot_Check_Result 等）。
+	3	我再幫你寫精準的 JOIN 語句。
+或者你直接回答下面問題，我馬上給你更準的 SQL：
+	•	你知道 AML False Hit 紀錄主要存在哪張表嗎？（表名）
+	•	AML_Screening_Log 或類似名稱的表有沒有？
+	•	RawMessage 欄位裡面有沒有包含 screening result 的 XML？
+把查到的表名或錯誤訊息貼給我，我立刻幫你調整 SQL！
