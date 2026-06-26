@@ -1,64 +1,29 @@
-問題診斷： 在 check_employer_filter 函式中這一行出錯：
-color = cell.font.color.rgb if cell.font and cell.font.color else None
-...
-if ... or (color and color.upper() != "000000"):
-cell.font.color.rgb 回傳的是一個 RGB 物件（或類似物件），而不是字串，所以無法呼叫 .upper()。
+目前的主要問題是：AML系統在SWIFT MX上線後，False Hit（假陽性警報）大幅增加，導致人工處理負荷嚴重惡化。
+問題核心整理（從你提供的截圖）：
+	1	False Hit 數量暴增：
+	◦	SWIFT MX 上線後，不論 PACS.008/009，大部分交易都會在 AML 系統觸發 False Hit，需要 OP Maker 和 Checker 人工放行。
+	◦	表格顯示最近一周（6/15–6/22）：
+	▪	匯入款：AML 人工處理比例大多在 86%–100%。
+	▪	匯出款：AML 人工處理比例甚至超過 100%（因為重複 False Hit），遠高於 HKWBS 處理單數。
+	▪	總數比例也很高（94%–135%）。
+	2	人工處理效率低下：
+	◦	每筆 False Hit 需要 Maker 逐項勾選 “Not match”（如 6/17 有 17 項），Checker 再放行。
+	◦	平均每筆要花 2–3 分鐘，嚴重影響客戶匯出/匯入款的時效性。
+	3	系統根本問題：
+	◦	Name Check（客戶名稱篩選系統） 效率低：
+	▪	過去 5 年設定沒調整，平均每 hit 回報率很低（control 33.76、manipulated 24.71）。
+	▪	HKMA on-site exam 時已提過這個問題，但改善不足。
+	◦	管理監督（Management oversight）不足，潛在問題未被充分追蹤與優化。
+目前狀況
+這封郵件是內部緊急反應（Importance: High），要求向 AML 系統主管反映，並請 IT 找出優化方向、提升系統效能。郵件也附上數據表和系統截圖作為證據。
 
-修正後的 `check_employer_filter` 函式
-請替換原本的函式為以下版本：
-def check_employer_filter(ws, col=30):
-    print("--> 正在檢查 任職機構篩選輔助欄（AD欄）...")
-    issues = []
-    for r in range(2, ws.max_row + 1):
-        cell = ws.cell(row=r, column=col)
-        val = str(cell.value).strip() if cell.value is not None else ""
-        
-        # 正確取得顏色字串
-        color_obj = None
-        if cell.font and cell.font.color:
-            if hasattr(cell.font.color, 'rgb'):
-                color_obj = cell.font.color.rgb
-            elif hasattr(cell.font.color, 'index'):  # 某些情況是 indexed color
-                color_obj = cell.font.color.index
-        
-        # 轉成可比較的字串
-        if isinstance(color_obj, str):
-            color_str = color_obj.upper().lstrip('FF')  # 去掉 alpha channel (ARGB -> RGB)
-        elif isinstance(color_obj, (tuple, list)):   # RGB tuple
-            color_str = ''.join(f'{x:02X}' for x in color_obj).upper()
-        else:
-            color_str = str(color_obj).upper() if color_obj is not None else ""
-        
-        is_black = color_str in ("000000", "00000000", "BLACK", "")
-        
-        if val == "" or "'" in val or "\n" in val or not is_black:
-            issues.append((r, val, color_str))
-    
-    if issues:
-        print("下列 AD 欄有異常（空白、單引號、換行、非黑字）：")
-        for row, val, color in issues:
-            print(f"  第{row}列，AD欄值：{val}，顏色：{color}")
-    else:
-        print("所有 AD 欄資料皆正常。")
-其他小建議（可同時優化）
-	1	統一顏色處理函式（推薦新增在檔案頂端）
-def get_font_color_str(cell):
-    """安全取得字體顏色字串（RGB）"""
-    if not (cell.font and cell.font.color):
-        return ""
-    color = cell.font.color
-    if hasattr(color, 'rgb'):
-        rgb = color.rgb
-        if isinstance(rgb, str):
-            return rgb.upper().lstrip('FF')  # ARGB -> RGB
-        elif isinstance(rgb, (tuple, list)):
-            return ''.join(f'{x:02X}' for x in rgb).upper()
-    return str(color).upper()
-然後在 unify_font_color 和 check_employer_filter 中都可以呼叫 get_font_color_str(cell)。
-	2	在 unify_font_color 也使用同樣的顏色判斷，避免不一致。
-
-完整修正步驟
-	1	把上面的 check_employer_filter 替換進去。
-	2	（建議）新增 get_font_color_str 輔助函式。
-	3	重新執行程式測試。
-需要我幫你把整個 check_data.py 修正後的版本一次貼出來嗎？還是你想先試這個函式？
+建議你現在可以做的（依你過去處理類似工作的經驗）：
+	•	短期：整理更完整的數據（例如用 SQL 拉更長期間的 False Hit 明細、特定規則觸發頻率），幫忙量化影響（每日多花多少工時）。
+	•	中期：參與或提出優化方案，例如調整篩選規則的 threshold、RC score、白名單機制、或 Name Check 系統參數 tuning。
+	•	提案：延續你之前在做 2026 維護提案的思路，把這件事寫進 Brisbane Branch AML/CFT 或 MY AML System 的改善項目。
+需要我幫你：
+	•	翻譯成自然的英文郵件回覆？
+	•	幫忙起草給 IT/主管的改善建議？
+	•	分析表格數據（例如計算平均增加幅度）？
+	•	還是整理成報告格式？
+把你想處理的方向告訴我，我可以立刻幫你處理！
