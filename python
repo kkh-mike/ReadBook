@@ -1,119 +1,31 @@
-False Hit 的主要原因分析（根據你截圖 + AML 系統常見機制）：
-1. 最直接可見的原因（從你最後一張圖）
-在 Print Review Result 那個表格裡，可以清楚看到系統偵測到的名字（Detected Name）大多是：
-	•	NEW YORK
-	•	BANK
-	•	TRUST
-	•	AMERICA / THE AMERICAS
-	•	EVER
-	•	SERVICES LLC
-	•	NEXUS LLC
-這些都是非常常見的通用詞彙（尤其是銀行、公司名稱、地址裡常出現的字）。 系統在做 Name Screening 時，使用了過於寬鬆的比對規則（fuzzy matching + substring matching），導致只要交易資料裡出現這些詞，就會被判定為潛在 hit，即使跟真實黑名單/制裁名單完全無關。
-2. 為什麼 SWIFT MX 上線後突然惡化？
-	•	SWIFT MT（舊格式）與 MX（新 ISO 20022 格式） 的資料結構不同：
-	◦	MX 把 Name、Address、Party Identification 等欄位拆得更細、結構化程度更高。
-	◦	舊系統的 screening logic 沒有針對 MX 格式好好調整，導致原本不會觸發的欄位現在大量被掃描。
-	•	結果就是同樣一筆交易，在 MX 格式下會產生更多 False Hit。
-3. 系統層面的根本問題（來自內部審計截圖）
-	•	Name Check 系統已經 5 年沒好好調整。
-	•	Efficiency rate 很低（平均每 hit 只產生極少有效回報）。
-	•	Threshold（門檻）和 Relative Correlation (RC) score 設定過於敏感。
-	•	管理監督不足，HKMA 之前 on-site exam 就已經指出這個問題，但改善動作慢。
-4. 其他常見造成 False Hit 的因素
-	•	白名單（Whitelist）維護不佳：很多正常往來客戶/銀行沒被加進白名單。
-	•	規則優先順序問題：某些通用詞的規則權重太高。
-	•	資料清洗不足：交易資料裡的簡稱、縮寫、大小寫、特殊符號處理不完善。
-	•	Watchlist 更新後沒有同步 regression test。
+pacs00
 
-簡單總結： 現在的 False Hit 大多是**「過度敏感的 Name Screening」遇上「MX 格式更豐富的資料」** 所產生的副作用。本質上是系統 tuning 沒跟上業務變化。
+Column_name	Type	Computed	Length	Prec	Scale	Nullable	TrimTrailingBlanks	FixedLenNullInSource	Collation
+ID	uniqueidentifier	no	16	     	     	no	(n/a)	(n/a)	NULL
+BankNo	nvarchar	no	6	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
+BranchNo	nvarchar	no	60	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
+ClientReferenceNo	nvarchar	no	80	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
+ClientMessageTypeCode	nvarchar	no	60	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
+RawMessage	nvarchar	no	-1	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
+SourceID	nvarchar	no	60	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
+Channel	nvarchar	no	60	     	     	yes	(n/a)	(n/a)	Chinese_Taiwan_Stroke_CI_AS
+Priority	int	no	4	10   	0    	yes	(n/a)	(n/a)	NULL
+CreatedDate	datetime2	no	8	27   	7    	no	(n/a)	(n/a)	NULL
+IsCompleted	bit	no	1	     	     	no	(n/a)	(n/a)	NULL
+CompletedDate	datetime2	no	8	27   	7    	yes	(n/a)	(n/a)	NULL
+Progress	varchar	no	20	     	     	no	no	no	Chinese_Taiwan_Stroke_CI_AS
+IsFeedBackSend	bit	no	1	     	     	no	(n/a)	(n/a)	NULL
+FeedBackSendDate	datetime2	no	8	27   	7    	yes	(n/a)	(n/a)	NULL
+TerminalId	varchar	no	50	     	     	yes	no	yes	Chinese_Taiwan_Stroke_CI_AS
+LastUpdatedDate	datetime2	no	8	27   	7    	yes	(n/a)	(n/a)	NULL
 
-你現在最需要的是數據佐證 + 改善建議。
-我可以幫你：
-	•	起草一份簡潔的英文/中文分析說明（給主管或 IT）
-	•	建議具體的優化方向（調 threshold、加白名單、調整規則、定期 tuning 等）
-	•	幫你設計 SQL 去抓最常造成 False Hit 的關鍵字或規則
-告訴我你想先處理哪部分？我立刻幫你準備。
+
+ClientReferenceNo = pacs.008.001.08
+
+按會上溝通，有見AML False Hit問題日益嚴重，有勞協助反映及處理。以減低系統False Hit人工處理比率。
+自SWIFT MX 上綫後，AML 系統中False hit情況倍增，不論PACS.008/009，大部分交易都會出現在AML 系統並False hit需OP Maker 和Checker 人工放行。
+以下以最近一周False hit筆數供貴組參考：
 
 
 
----
-
-✅ 好的，我直接教你怎麼在資料庫查 False Hit。
-由於你之前常處理 AML 相關的 SQL（CIF、ACCT、TRXN、SWIFT 等），以下是實務上最有用的查詢方向與範例。你可以根據實際 table 名稱調整。
-1. 先確認相關 Table（建議先跑這幾句）
--- 找跟 AML screening / false hit 有關的表格
-SELECT table_name 
-FROM information_schema.tables 
-WHERE table_name LIKE '%aml%' 
-   OR table_name LIKE '%screen%' 
-   OR table_name LIKE '%hit%' 
-   OR table_name LIKE '%swif%' 
-ORDER BY table_name;
-常見可能表格：
-	•	AML_SCREENING_LOG / SWIFT_SCREENING_RESULT
-	•	PATRIOT_HIT / NAME_CHECK_RESULT
-	•	TRXN / SWIFT_TXN / PACS_008 / PACS_009
-
-2. 核心查詢：False Hit 統計（推薦先跑這個）
-WITH FalseHit AS (
-    SELECT 
-        DATE(Transaction_Date) AS txn_date,
-        COUNT(*) AS total_txn,
-        SUM(CASE WHEN Is_False_Hit = 1 OR Hit_Result = 'False' OR Manual_Review_Required = 1 
-                 THEN 1 ELSE 0 END) AS false_hit_count,
-        ROUND(100.0 * SUM(CASE WHEN Is_False_Hit = 1 OR Hit_Result = 'False' THEN 1 ELSE 0 END) 
-              / COUNT(*), 2) AS false_hit_pct,
-        COUNT(DISTINCT Rule_ID) AS triggered_rules
-    FROM AML_Screening_Log  -- ← 改成你實際的 table
-    WHERE Transaction_Date >= '2026-06-01'
-      AND Channel IN ('SWIFT MX', 'PACS008', 'PACS009')
-    GROUP BY DATE(Transaction_Date)
-)
-SELECT * FROM FalseHit 
-ORDER BY txn_date DESC;
-
-3. 最常造成 False Hit 的關鍵字 / 名稱（非常重要！）
-SELECT 
-    Detected_Name,          -- 或 Matched_Word, Hit_String
-    COUNT(*) AS hit_count,
-    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) AS percentage,
-    COUNT(DISTINCT Transaction_ID) AS unique_txns
-FROM AML_Screening_Log
-WHERE Is_False_Hit = 1 
-   OR Manual_Action = 'Not Match'
-GROUP BY Detected_Name
-HAVING COUNT(*) > 5
-ORDER BY hit_count DESC
-LIMIT 50;
-這會告訴你像 NEW YORK、BANK、TRUST 這些詞到底貢獻了多少 False Hit。
-
-4. 特定 Rule 或 Module 的 False Hit 分析
-SELECT 
-    Rule_ID,
-    Rule_Name,
-    COUNT(*) AS hit_count,
-    SUM(CASE WHEN Manual_Review_Required = 1 THEN 1 ELSE 0 END) AS manual_reviews,
-    AVG(Processing_Time_Seconds) AS avg_time_sec
-FROM AML_Screening_Log
-WHERE Transaction_Date >= '2026-06-15'
-GROUP BY Rule_ID, Rule_Name
-ORDER BY hit_count DESC;
-
-5. 前後對比（MX 上線前後）
-SELECT 
-    CASE WHEN Transaction_Date >= '2026-06-10' THEN 'After MX' ELSE 'Before MX' END AS period,
-    COUNT(*) AS total,
-    SUM(CASE WHEN Is_False_Hit = 1 THEN 1 ELSE 0 END) AS false_hits,
-    ROUND(100.0 * SUM(CASE WHEN Is_False_Hit = 1 THEN 1 ELSE 0 END) / COUNT(*), 2) AS pct
-FROM AML_Screening_Log
-GROUP BY period;
-
-小建議：
-	•	先用上面第 2、3 個 query 跑看看，把結果截圖或匯出給我。
-	•	如果有 Is_False_Hit、Hit_Result、Manual_Action 這些欄位就很完美；如果沒有，就用 Manual_Review_Required = 1 或 Action = 'Not Match' 來判斷。
-	•	可以加上 Beneficiary_Name、Originator_Name 等欄位一起看。
-告訴我：
-	1	你目前查到的主要 table 名稱是哪些？
-	2	有沒有 Is_False_Hit 這種欄位？
-	3	想重點看哪一塊（例如某幾天、特定規則、特定關鍵字）？
-我可以立刻幫你把 SQL 再精準調整！
+我要怎麼查阿
