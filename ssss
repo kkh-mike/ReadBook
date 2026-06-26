@@ -1,323 +1,64 @@
---> 正在檢查 任職機構篩選輔助欄（AD欄）...
-Traceback (most recent call last):
-  File "D:\1141923\python\check_data.py", line 303, in <module>
-    main()
-    ~~~~^^
-  File "D:\1141923\python\check_data.py", line 292, in main
-    check_employer_filter(ws, col=30)
-    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
-  File "D:\1141923\python\check_data.py", line 200, in check_employer_filter
-    if val == "" or "'" in val or "\n" in val or (color and color.upper() != "000000"):
-                                                            ^^^^^^^^^^^
-AttributeError: 'RGB' object has no attribute 'upper'
+問題診斷： 在 check_employer_filter 函式中這一行出錯：
+color = cell.font.color.rgb if cell.font and cell.font.color else None
+...
+if ... or (color and color.upper() != "000000"):
+cell.font.color.rgb 回傳的是一個 RGB 物件（或類似物件），而不是字串，所以無法呼叫 .upper()。
 
-
-
-
-
-import os
-import sys
-import argparse
-import pandas as pd
-from openpyxl import load_workbook
-from openpyxl.styles import Font, NamedStyle
-from openpyxl.utils import get_column_letter
-
-def parse_arguments():
-    """解析命令列參數"""
-    parser = argparse.ArgumentParser(description="Data 頁面資料純邏輯檢核工具（輸出 Log）")
-    parser.add_argument("input_file", help="輸入的 Excel 檔案路徑 (例如: data.xlsx)")
-    return parser.parse_args()
-
-
-def unify_font_color(ws):
-    """全資料區字體顏色統一：除了正紅字外，其他全部改成黑色"""
-    print("--> 正在統一字體顏色（保留正紅字）...")
-    black_font = Font(color="000000")
-    
-    max_row = ws.max_row
-    max_col = ws.max_column
-    
-    for row in range(4, max_row + 1):
-        for col in range(1, max_col + 1):
-            cell = ws.cell(row=row, column=col)
-            if cell.font and cell.font.color and str(cell.font.color.rgb).upper() in ["FFFF0000", "FF0000"]:
-                continue  # 保留正紅字
-            cell.font = black_font
-
-
-def set_customer_no_as_text(ws, customer_col=5):
-    """將 CustomerNo 欄位設為文字格式"""
-    print(f"--> 正在將 E 欄 (CustomerNo) 設為文字格式...")
-    text_style = NamedStyle(name="text_format")
-    text_style.number_format = '@'
-    
-    for row in range(1, ws.max_row + 1):
-        cell = ws.cell(row=row, column=customer_col)
-        cell.style = text_style
-
-
-def check_duplicate_customer_no(ws, customer_col=5):
-    print("--> 正在檢查 E 欄 CustomerNo 重複...")
-
-    last_row = ws.max_row
-    if last_row < 2:
-        print("    資料列不足，跳過重複檢查")
-        return
-
-    values = []
-    empty_count = 0
-    for r in range(2, last_row + 1):  # 從第2列開始
-        val = ws.cell(row=r, column=customer_col).value
-        key = str(val).strip() if val is not None else ""
-        values.append(key)
-        if key == "":
-            empty_count += 1
-
-    from collections import Counter
-    customer_count = Counter([v for v in values if v])
-
-    print("所有 CustomerNo 出現次數：")
-    for k, v in customer_count.items():
-        print(f"{k}: {v}")
-
-    duplicates = {k: v for k, v in customer_count.items() if v > 1}
-    print(f"總共檢查了 {len(values)} 筆 CustomerNo")
-    print(f"其中空值有 {empty_count} 筆")
-    if duplicates:
-        print("重複的 CustomerNo：")
-        for k, v in duplicates.items():
-            print(f"  {k}：{v} 次")
-    else:
-        print("沒有重複的 CustomerNo")
-
-def check_jobtitle_code(ws_data, ws_code, jobtitle_col=29, code_col=3):
-    print("--> 正在檢查 JobTitle 代碼是否存在於 Code 工作表...")
-
-    # 取得 Code 工作表所有 C 欄的代碼（只取前四碼）
-    code_set = set()
-    for r in range(2, ws_code.max_row + 1):
-        val = ws_code.cell(row=r, column=code_col).value
-        if val:
-            code_set.add(str(val).strip())
-
-    # 檢查 Data 工作表 AC 欄
-    not_found = []
-    for r in range(2, ws_data.max_row + 1):
-        val = ws_data.cell(row=r, column=jobtitle_col).value
-        if val:
-            code4 = str(val).strip()[:4]
-            if code4 and code4 not in code_set:
-                not_found.append((r, val, code4))
-
-    if not_found:
-        print("下列 JobTitle 代碼前四碼不存在於 Code 工作表 C 欄：")
-        for row, full_val, code4 in not_found:
-            print(f"  第{row}列，AC欄值：{full_val}，前四碼：{code4}")
-    else:
-        print("所有 JobTitle 代碼前四碼都存在於 Code 工作表。")
-
-
-def check_occup_code(ws_data, ws_code, occup_col=28, code_col=2):
-    print("--> 正在檢查 OCCUP 代碼是否存在於 Code 工作表...")
-
-    # 取得 Code 工作表所有 B 欄的代碼（只取前四碼）
-    code_set = set()
-    for r in range(2, ws_code.max_row + 1):
-        val = ws_code.cell(row=r, column=code_col).value
-        if val:
-            code_set.add(str(val).strip())
-
-    # 檢查 Data 工作表 AB 欄
-    not_found = []
-    for r in range(2, ws_data.max_row + 1):
-        val = ws_data.cell(row=r, column=occup_col).value
-        if val:
-            code4 = str(val).strip()[:4]
-            if code4 and code4 not in code_set:
-                not_found.append((r, val, code4))
-
-    if not_found:
-        print("下列 OCCUP 代碼前四碼不存在於 Code 工作表 B 欄：")
-        for row, full_val, code4 in not_found:
-            print(f"  第{row}列，AB欄值：{full_val}，前四碼：{code4}")
-    else:
-        print("所有 OCCUP 代碼前四碼都存在於 Code 工作表。")
-
-
-
-def check_birth_country_code(ws_data, ws_code, col_data=25, col_code=1):
-    print("--> 正在檢查 出生地國家代碼 是否存在於 Code 工作表...")
-    code_set = set()
-    for r in range(2, ws_code.max_row + 1):
-        val = ws_code.cell(row=r, column=col_code).value
-        if val:
-            code_set.add(str(val).strip())
-    not_found = []
-    for r in range(2, ws_data.max_row + 1):
-        val = ws_data.cell(row=r, column=col_data).value
-        if val and str(val).strip() not in code_set:
-            not_found.append((r, val))
-    if not_found:
-        print("下列 出生地國家代碼 不存在於 Code 工作表 A 欄：")
-        for row, val in not_found:
-            print(f"  第{row}列，Y欄值：{val}")
-    else:
-        print("所有 出生地國家代碼 都存在於 Code 工作表。")
-
-def check_permanent_country_code(ws_data, ws_code, col_data=26, col_code=1):
-    print("--> 正在檢查 永久住址國家代碼 是否存在於 Code 工作表...")
-    code_set = set()
-    for r in range(2, ws_code.max_row + 1):
-        val = ws_code.cell(row=r, column=col_code).value
-        if val:
-            code_set.add(str(val).strip())
-    not_found = []
-    for r in range(2, ws_data.max_row + 1):
-        val = ws_data.cell(row=r, column=col_data).value
-        if val and str(val).strip() not in code_set:
-            not_found.append((r, val))
-    if not_found:
-        print("下列 永久住址國家代碼 不存在於 Code 工作表 A 欄：")
-        for row, val in not_found:
-            print(f"  第{row}列，Z欄值：{val}")
-    else:
-        print("所有 永久住址國家代碼 都存在於 Code 工作表。")
-
-def check_mail_country_code(ws_data, ws_code, col_data=27, col_code=1):
-    print("--> 正在檢查 郵寄地址國家代碼 是否存在於 Code 工作表...")
-    code_set = set()
-    for r in range(2, ws_code.max_row + 1):
-        val = ws_code.cell(row=r, column=col_code).value
-        if val:
-            code_set.add(str(val).strip())
-    not_found = []
-    for r in range(2, ws_data.max_row + 1):
-        val = ws_data.cell(row=r, column=col_data).value
-        if val and str(val).strip() not in code_set:
-            not_found.append((r, val))
-    if not_found:
-        print("下列 郵寄地址國家代碼 不存在於 Code 工作表 A 欄：")
-        for row, val in not_found:
-            print(f"  第{row}列，AA欄值：{val}")
-    else:
-        print("所有 郵寄地址國家代碼 都存在於 Code 工作表。")
-
-
-# 1. 任職機構篩選輔助欄（AD欄/30欄）
-
+修正後的 `check_employer_filter` 函式
+請替換原本的函式為以下版本：
 def check_employer_filter(ws, col=30):
     print("--> 正在檢查 任職機構篩選輔助欄（AD欄）...")
     issues = []
     for r in range(2, ws.max_row + 1):
         cell = ws.cell(row=r, column=col)
         val = str(cell.value).strip() if cell.value is not None else ""
-        color = cell.font.color.rgb if cell.font and cell.font.color else None
-        if val == "" or "'" in val or "\n" in val or (color and color.upper() != "000000"):
-            issues.append((r, val, color))
+        
+        # 正確取得顏色字串
+        color_obj = None
+        if cell.font and cell.font.color:
+            if hasattr(cell.font.color, 'rgb'):
+                color_obj = cell.font.color.rgb
+            elif hasattr(cell.font.color, 'index'):  # 某些情況是 indexed color
+                color_obj = cell.font.color.index
+        
+        # 轉成可比較的字串
+        if isinstance(color_obj, str):
+            color_str = color_obj.upper().lstrip('FF')  # 去掉 alpha channel (ARGB -> RGB)
+        elif isinstance(color_obj, (tuple, list)):   # RGB tuple
+            color_str = ''.join(f'{x:02X}' for x in color_obj).upper()
+        else:
+            color_str = str(color_obj).upper() if color_obj is not None else ""
+        
+        is_black = color_str in ("000000", "00000000", "BLACK", "")
+        
+        if val == "" or "'" in val or "\n" in val or not is_black:
+            issues.append((r, val, color_str))
+    
     if issues:
         print("下列 AD 欄有異常（空白、單引號、換行、非黑字）：")
         for row, val, color in issues:
             print(f"  第{row}列，AD欄值：{val}，顏色：{color}")
     else:
         print("所有 AD 欄資料皆正常。")
+其他小建議（可同時優化）
+	1	統一顏色處理函式（推薦新增在檔案頂端）
+def get_font_color_str(cell):
+    """安全取得字體顏色字串（RGB）"""
+    if not (cell.font and cell.font.color):
+        return ""
+    color = cell.font.color
+    if hasattr(color, 'rgb'):
+        rgb = color.rgb
+        if isinstance(rgb, str):
+            return rgb.upper().lstrip('FF')  # ARGB -> RGB
+        elif isinstance(rgb, (tuple, list)):
+            return ''.join(f'{x:02X}' for x in rgb).upper()
+    return str(color).upper()
+然後在 unify_font_color 和 check_employer_filter 中都可以呼叫 get_font_color_str(cell)。
+	2	在 unify_font_color 也使用同樣的顏色判斷，避免不一致。
 
-
-# 2. 開戶目的代碼是否存在（AJ欄/36欄）到 Code 工作表 D欄（4欄）
-
-def check_account_purpose_code(ws_data, ws_code, col_data=36, col_code=4):
-    print("--> 正在檢查 開戶目的代碼 是否存在於 Code 工作表 D 欄...")
-    code_set = set()
-    for r in range(2, ws_code.max_row + 1):
-        val = ws_code.cell(row=r, column=col_code).value
-        if val:
-            code_set.add(str(val).strip())
-    not_found = []
-    for r in range(2, ws_data.max_row + 1):
-        val = ws_data.cell(row=r, column=col_data).value
-        if val and str(val).strip() not in code_set:
-            not_found.append((r, val))
-    if not_found:
-        print("下列 開戶目的代碼 不存在於 Code 工作表 D 欄：")
-        for row, val in not_found:
-            print(f"  第{row}列，AJ欄值：{val}")
-    else:
-        print("所有 開戶目的代碼 都存在於 Code 工作表。")
-
-
-# 3. 審核結果欄位是否合法（AL欄/38欄）
-
-def check_review_result(ws, col=38):
-    print("--> 正在檢查 審核結果欄位（AL欄）是否合法...")
-    issues = []
-    for r in range(2, ws.max_row + 1):
-        val = ws.cell(row=r, column=col).value
-        val_str = str(val) if val is not None else ""
-        if (val is None or val_str.strip() == "" or
-            "'" in val_str or "\n" in val_str or
-            val_str != val_str.strip()):
-            issues.append((r, val))
-    if issues:
-        print("下列 AL 欄有異常（空白、單引號、換行、前後空格）：")
-        for row, val in issues:
-            print(f"  第{row}列，AL欄值：{val}")
-    else:
-        print("所有 AL 欄資料皆正常。")  
-def main():
-    args = parse_arguments()
-    input_file = args.input_file
-    
-    if not os.path.exists(input_file):
-        print(f"錯誤: 找不到檔案 {input_file}")
-        sys.exit(1)
-
-    print(f"--> 開始處理檔案: {input_file}")
-    
-    # 檢查工作表
-    try:
-        xl = pd.ExcelFile(input_file)
-    except Exception as e:
-        print(f"錯誤: 無法讀取 Excel 檔案 ({e})")
-        sys.exit(1)
-        
-    if "Data" not in xl.sheet_names or "Code" not in xl.sheet_names:
-        print("錯誤: 檔案必須包含 'Data' 和 'Code' 工作表")
-        sys.exit(1)
-
-    # 使用 openpyxl 載入
-    wb = load_workbook(input_file)
-    ws = wb["Data"]
-
-    # === 執行步驟 ===
-    unify_font_color(ws)
-    set_customer_no_as_text(ws, customer_col=5)
-    check_duplicate_customer_no(ws, customer_col=5)
-
-    # check_jobtitle_code
-    ws_code = wb["Code"]
-    check_jobtitle_code(ws, ws_code, jobtitle_col=29, code_col=3)
-
-
-    check_occup_code(ws, ws_code, occup_col=28, code_col=2)
-
-
-    check_birth_country_code(ws, ws_code, col_data=25, col_code=1)
-    check_permanent_country_code(ws, ws_code, col_data=26, col_code=1)
-    check_mail_country_code(ws, ws_code, col_data=27, col_code=1)
-
-    check_employer_filter(ws, col=30)
-    check_account_purpose_code(ws, ws_code, col_data=36, col_code=4)
-    check_review_result(ws, col=38)
-
-    # # 儲存結果
-    # output_file = input_file.replace(".xlsx", "_checked.xlsx")
-    # wb.save(output_file)
-    # print(f"? 處理完成！已儲存為: {output_file}")
-
-
-if __name__ == "__main__":
-    main()
-
-
-
-
+完整修正步驟
+	1	把上面的 check_employer_filter 替換進去。
+	2	（建議）新增 get_font_color_str 輔助函式。
+	3	重新執行程式測試。
+需要我幫你把整個 check_data.py 修正後的版本一次貼出來嗎？還是你想先試這個函式？
