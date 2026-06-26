@@ -1,5 +1,20 @@
-已修正！CustomerNo 欄位改為 E 欄（第 5 欄）。
-以下是更新後的完整腳本：
+--> 正在檢查 任職機構篩選輔助欄（AD欄）...
+Traceback (most recent call last):
+  File "D:\1141923\python\check_data.py", line 303, in <module>
+    main()
+    ~~~~^^
+  File "D:\1141923\python\check_data.py", line 292, in main
+    check_employer_filter(ws, col=30)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "D:\1141923\python\check_data.py", line 200, in check_employer_filter
+    if val == "" or "'" in val or "\n" in val or (color and color.upper() != "000000"):
+                                                            ^^^^^^^^^^^
+AttributeError: 'RGB' object has no attribute 'upper'
+
+
+
+
+
 import os
 import sys
 import argparse
@@ -43,37 +58,211 @@ def set_customer_no_as_text(ws, customer_col=5):
 
 
 def check_duplicate_customer_no(ws, customer_col=5):
-    """檢查 CustomerNo 是否重複，並標示"""
     print("--> 正在檢查 E 欄 CustomerNo 重複...")
-    
+
     last_row = ws.max_row
-    if last_row < 4:
+    if last_row < 2:
         print("    資料列不足，跳過重複檢查")
         return
-    
-    # 在最右邊新增標示欄
-    flag_col_letter = get_column_letter(ws.max_column + 1)
-    ws[f"{flag_col_letter}3"] = "CustomerNo 重複檢查"
-    
-    for r in range(4, last_row + 1):
-        cell_value = ws.cell(row=r, column=customer_col).value
-        if cell_value is None or str(cell_value).strip() == "":
-            continue
-            
-        # 計算重複次數
-        count = 0
-        for check_r in range(4, last_row + 1):
-            if str(ws.cell(row=check_r, column=customer_col).value) == str(cell_value):
-                count += 1
-                
-        flag_cell = ws.cell(row=r, column=ws.max_column)
-        if count > 1:
-            flag_cell.value = f"重複 ({count} 次)"
-            flag_cell.font = Font(color="FF0000", bold=True)  # 紅字標示
-        else:
-            flag_cell.value = "OK"
+
+    values = []
+    empty_count = 0
+    for r in range(2, last_row + 1):  # 從第2列開始
+        val = ws.cell(row=r, column=customer_col).value
+        key = str(val).strip() if val is not None else ""
+        values.append(key)
+        if key == "":
+            empty_count += 1
+
+    from collections import Counter
+    customer_count = Counter([v for v in values if v])
+
+    print("所有 CustomerNo 出現次數：")
+    for k, v in customer_count.items():
+        print(f"{k}: {v}")
+
+    duplicates = {k: v for k, v in customer_count.items() if v > 1}
+    print(f"總共檢查了 {len(values)} 筆 CustomerNo")
+    print(f"其中空值有 {empty_count} 筆")
+    if duplicates:
+        print("重複的 CustomerNo：")
+        for k, v in duplicates.items():
+            print(f"  {k}：{v} 次")
+    else:
+        print("沒有重複的 CustomerNo")
+
+def check_jobtitle_code(ws_data, ws_code, jobtitle_col=29, code_col=3):
+    print("--> 正在檢查 JobTitle 代碼是否存在於 Code 工作表...")
+
+    # 取得 Code 工作表所有 C 欄的代碼（只取前四碼）
+    code_set = set()
+    for r in range(2, ws_code.max_row + 1):
+        val = ws_code.cell(row=r, column=code_col).value
+        if val:
+            code_set.add(str(val).strip())
+
+    # 檢查 Data 工作表 AC 欄
+    not_found = []
+    for r in range(2, ws_data.max_row + 1):
+        val = ws_data.cell(row=r, column=jobtitle_col).value
+        if val:
+            code4 = str(val).strip()[:4]
+            if code4 and code4 not in code_set:
+                not_found.append((r, val, code4))
+
+    if not_found:
+        print("下列 JobTitle 代碼前四碼不存在於 Code 工作表 C 欄：")
+        for row, full_val, code4 in not_found:
+            print(f"  第{row}列，AC欄值：{full_val}，前四碼：{code4}")
+    else:
+        print("所有 JobTitle 代碼前四碼都存在於 Code 工作表。")
 
 
+def check_occup_code(ws_data, ws_code, occup_col=28, code_col=2):
+    print("--> 正在檢查 OCCUP 代碼是否存在於 Code 工作表...")
+
+    # 取得 Code 工作表所有 B 欄的代碼（只取前四碼）
+    code_set = set()
+    for r in range(2, ws_code.max_row + 1):
+        val = ws_code.cell(row=r, column=code_col).value
+        if val:
+            code_set.add(str(val).strip())
+
+    # 檢查 Data 工作表 AB 欄
+    not_found = []
+    for r in range(2, ws_data.max_row + 1):
+        val = ws_data.cell(row=r, column=occup_col).value
+        if val:
+            code4 = str(val).strip()[:4]
+            if code4 and code4 not in code_set:
+                not_found.append((r, val, code4))
+
+    if not_found:
+        print("下列 OCCUP 代碼前四碼不存在於 Code 工作表 B 欄：")
+        for row, full_val, code4 in not_found:
+            print(f"  第{row}列，AB欄值：{full_val}，前四碼：{code4}")
+    else:
+        print("所有 OCCUP 代碼前四碼都存在於 Code 工作表。")
+
+
+
+def check_birth_country_code(ws_data, ws_code, col_data=25, col_code=1):
+    print("--> 正在檢查 出生地國家代碼 是否存在於 Code 工作表...")
+    code_set = set()
+    for r in range(2, ws_code.max_row + 1):
+        val = ws_code.cell(row=r, column=col_code).value
+        if val:
+            code_set.add(str(val).strip())
+    not_found = []
+    for r in range(2, ws_data.max_row + 1):
+        val = ws_data.cell(row=r, column=col_data).value
+        if val and str(val).strip() not in code_set:
+            not_found.append((r, val))
+    if not_found:
+        print("下列 出生地國家代碼 不存在於 Code 工作表 A 欄：")
+        for row, val in not_found:
+            print(f"  第{row}列，Y欄值：{val}")
+    else:
+        print("所有 出生地國家代碼 都存在於 Code 工作表。")
+
+def check_permanent_country_code(ws_data, ws_code, col_data=26, col_code=1):
+    print("--> 正在檢查 永久住址國家代碼 是否存在於 Code 工作表...")
+    code_set = set()
+    for r in range(2, ws_code.max_row + 1):
+        val = ws_code.cell(row=r, column=col_code).value
+        if val:
+            code_set.add(str(val).strip())
+    not_found = []
+    for r in range(2, ws_data.max_row + 1):
+        val = ws_data.cell(row=r, column=col_data).value
+        if val and str(val).strip() not in code_set:
+            not_found.append((r, val))
+    if not_found:
+        print("下列 永久住址國家代碼 不存在於 Code 工作表 A 欄：")
+        for row, val in not_found:
+            print(f"  第{row}列，Z欄值：{val}")
+    else:
+        print("所有 永久住址國家代碼 都存在於 Code 工作表。")
+
+def check_mail_country_code(ws_data, ws_code, col_data=27, col_code=1):
+    print("--> 正在檢查 郵寄地址國家代碼 是否存在於 Code 工作表...")
+    code_set = set()
+    for r in range(2, ws_code.max_row + 1):
+        val = ws_code.cell(row=r, column=col_code).value
+        if val:
+            code_set.add(str(val).strip())
+    not_found = []
+    for r in range(2, ws_data.max_row + 1):
+        val = ws_data.cell(row=r, column=col_data).value
+        if val and str(val).strip() not in code_set:
+            not_found.append((r, val))
+    if not_found:
+        print("下列 郵寄地址國家代碼 不存在於 Code 工作表 A 欄：")
+        for row, val in not_found:
+            print(f"  第{row}列，AA欄值：{val}")
+    else:
+        print("所有 郵寄地址國家代碼 都存在於 Code 工作表。")
+
+
+# 1. 任職機構篩選輔助欄（AD欄/30欄）
+
+def check_employer_filter(ws, col=30):
+    print("--> 正在檢查 任職機構篩選輔助欄（AD欄）...")
+    issues = []
+    for r in range(2, ws.max_row + 1):
+        cell = ws.cell(row=r, column=col)
+        val = str(cell.value).strip() if cell.value is not None else ""
+        color = cell.font.color.rgb if cell.font and cell.font.color else None
+        if val == "" or "'" in val or "\n" in val or (color and color.upper() != "000000"):
+            issues.append((r, val, color))
+    if issues:
+        print("下列 AD 欄有異常（空白、單引號、換行、非黑字）：")
+        for row, val, color in issues:
+            print(f"  第{row}列，AD欄值：{val}，顏色：{color}")
+    else:
+        print("所有 AD 欄資料皆正常。")
+
+
+# 2. 開戶目的代碼是否存在（AJ欄/36欄）到 Code 工作表 D欄（4欄）
+
+def check_account_purpose_code(ws_data, ws_code, col_data=36, col_code=4):
+    print("--> 正在檢查 開戶目的代碼 是否存在於 Code 工作表 D 欄...")
+    code_set = set()
+    for r in range(2, ws_code.max_row + 1):
+        val = ws_code.cell(row=r, column=col_code).value
+        if val:
+            code_set.add(str(val).strip())
+    not_found = []
+    for r in range(2, ws_data.max_row + 1):
+        val = ws_data.cell(row=r, column=col_data).value
+        if val and str(val).strip() not in code_set:
+            not_found.append((r, val))
+    if not_found:
+        print("下列 開戶目的代碼 不存在於 Code 工作表 D 欄：")
+        for row, val in not_found:
+            print(f"  第{row}列，AJ欄值：{val}")
+    else:
+        print("所有 開戶目的代碼 都存在於 Code 工作表。")
+
+
+# 3. 審核結果欄位是否合法（AL欄/38欄）
+
+def check_review_result(ws, col=38):
+    print("--> 正在檢查 審核結果欄位（AL欄）是否合法...")
+    issues = []
+    for r in range(2, ws.max_row + 1):
+        val = ws.cell(row=r, column=col).value
+        val_str = str(val) if val is not None else ""
+        if (val is None or val_str.strip() == "" or
+            "'" in val_str or "\n" in val_str or
+            val_str != val_str.strip()):
+            issues.append((r, val))
+    if issues:
+        print("下列 AL 欄有異常（空白、單引號、換行、前後空格）：")
+        for row, val in issues:
+            print(f"  第{row}列，AL欄值：{val}")
+    else:
+        print("所有 AL 欄資料皆正常。")  
 def main():
     args = parse_arguments()
     input_file = args.input_file
@@ -104,18 +293,31 @@ def main():
     set_customer_no_as_text(ws, customer_col=5)
     check_duplicate_customer_no(ws, customer_col=5)
 
-    # 儲存結果
-    output_file = input_file.replace(".xlsx", "_checked.xlsx")
-    wb.save(output_file)
-    print(f"✅ 處理完成！已儲存為: {output_file}")
+    # check_jobtitle_code
+    ws_code = wb["Code"]
+    check_jobtitle_code(ws, ws_code, jobtitle_col=29, code_col=3)
+
+
+    check_occup_code(ws, ws_code, occup_col=28, code_col=2)
+
+
+    check_birth_country_code(ws, ws_code, col_data=25, col_code=1)
+    check_permanent_country_code(ws, ws_code, col_data=26, col_code=1)
+    check_mail_country_code(ws, ws_code, col_data=27, col_code=1)
+
+    check_employer_filter(ws, col=30)
+    check_account_purpose_code(ws, ws_code, col_data=36, col_code=4)
+    check_review_result(ws, col=38)
+
+    # # 儲存結果
+    # output_file = input_file.replace(".xlsx", "_checked.xlsx")
+    # wb.save(output_file)
+    # print(f"? 處理完成！已儲存為: {output_file}")
 
 
 if __name__ == "__main__":
     main()
-重點修改：
-	•	CustomerNo 欄位改為 E 欄（customer_col=5）
-	•	重複檢查現在針對 E 欄
-	•	標示欄位會顯示「重複 (X 次)」更清楚
-執行方式不變：
-python script.py yourfile.xlsx
-需要我再加上其他功能嗎？（例如把重複的改用條件格式、記錄總重複筆數到 Log、檢查其他欄位等）
+
+
+
+
