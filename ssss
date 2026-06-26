@@ -1,14 +1,88 @@
+以下是更新後的完整腳本，我已經幫你把下一個步驟的邏輯加上去了：
 import os
 import sys
 import argparse
 import pandas as pd
 from openpyxl import load_workbook
+from openpyxl.styles import Font, NamedStyle
+from openpyxl.utils import get_column_letter
 
 def parse_arguments():
     """解析命令列參數"""
     parser = argparse.ArgumentParser(description="Data 頁面資料純邏輯檢核工具（輸出 Log）")
     parser.add_argument("input_file", help="輸入的 Excel 檔案路徑 (例如: data.xlsx)")
     return parser.parse_args()
+
+
+def unify_font_color(ws):
+    """全資料區字體顏色統一：除了正紅字外，其他全部改成黑色"""
+    print("--> 正在統一字體顏色（保留正紅字）...")
+    black_font = Font(color="000000")
+    
+    # 找出資料區範圍（從第4列開始，假設前3列是標題）
+    max_row = ws.max_row
+    max_col = ws.max_column
+    
+    for row in range(4, max_row + 1):
+        for col in range(1, max_col + 1):
+            cell = ws.cell(row=row, column=col)
+            if cell.font and cell.font.color and cell.font.color.rgb == "FFFF0000":  # 正紅色 (ARGB)
+                continue  # 保留正紅字
+            cell.font = black_font
+
+
+def set_customer_no_as_text(ws):
+    """將 C 欄 (CustomerNo) 設為文字格式"""
+    print("--> 正在將 C 欄設為文字格式...")
+    # 建立文字格式樣式
+    text_style = NamedStyle(name="text_format")
+    text_style.number_format = '@'  # @ 代表文字格式
+    
+    col_c = 3  # C 欄
+    for row in range(1, ws.max_row + 1):
+        cell = ws.cell(row=row, column=col_c)
+        cell.style = text_style
+
+
+def check_duplicate_customer_no(ws):
+    """檢查 CustomerNo 是否重複，並標示"""
+    print("--> 正在檢查 CustomerNo 重複...")
+    col_c = 3  # C 欄
+    
+    # 取得最後一列
+    last_row = ws.max_row
+    if last_row < 4:
+        print("    資料列不足，跳過重複檢查")
+        return
+    
+    # 先建立一個輔助欄位來標示（例如在 AA 欄）
+    flag_col = get_column_letter(ws.max_column + 1)  # 目前最後一欄的下一欄
+    ws[f"{flag_col}3"] = "CustomerNo 重複檢查"
+    
+    for r in range(4, last_row + 1):
+        cell_value = ws.cell(row=r, column=col_c).value
+        if cell_value is None or str(cell_value).strip() == "":
+            continue
+            
+        # 用 COUNTIF 檢查
+        formula = f'=COUNTIF(C4:C{last_row}, C{r})'
+        flag_cell = ws.cell(row=r, column=ws.max_column)
+        flag_cell.value = formula
+        
+        # 如果大於1就標紅底或文字
+        if ws.cell(row=r, column=col_c).font and ws.cell(row=r, column=col_c).font.color and ws.cell(row=r, column=col_c).font.color.rgb == "FFFF0000":
+            continue  # 正紅字的不標示
+        
+        # 簡單方式：直接在旁邊寫 "重複" 並標紅
+        count = 0
+        for check_r in range(4, last_row + 1):
+            if str(ws.cell(row=check_r, column=col_c).value) == str(cell_value):
+                count += 1
+        if count > 1:
+            flag_cell = ws.cell(row=r, column=ws.max_column)
+            flag_cell.value = "重複"
+            flag_cell.font = Font(color="FF0000", bold=True)  # 紅字標示
+
 
 def main():
     args = parse_arguments()
@@ -18,9 +92,9 @@ def main():
         print(f"錯誤: 找不到檔案 {input_file}")
         sys.exit(1)
 
-    print(f"--> 開始讀取檔案: {input_file}")
+    print(f"--> 開始處理檔案: {input_file}")
     
-    # 1. 檢查工作表是否存在
+    # 檢查工作表
     try:
         xl = pd.ExcelFile(input_file)
     except Exception as e:
@@ -28,18 +102,37 @@ def main():
         sys.exit(1)
         
     if "Data" not in xl.sheet_names or "Code" not in xl.sheet_names:
-        print("錯誤: 檔案必須包含 'Data' 工作表")
+        print("錯誤: 檔案必須包含 'Data' 和 'Code' 工作表")
         sys.exit(1)
+
+    # 使用 openpyxl 載入以進行格式修改
+    wb = load_workbook(input_file)
+    ws = wb["Data"]
+
+    # === 執行步驟 ===
+    unify_font_color(ws)
+    set_customer_no_as_text(ws)
+    check_duplicate_customer_no(ws)
+
+    # 儲存修改後的檔案（加上 _checked 後綴）
+    output_file = input_file.replace(".xlsx", "_checked.xlsx")
+    wb.save(output_file)
+    print(f"✅ 處理完成！已儲存為: {output_file}")
 
 
 if __name__ == "__main__":
     main()
+使用方式
+python script.py data.xlsx
+說明
+	•	字體顏色：只保留正紅色（FFFF0000），其他全部變黑色。
+	•	C 欄格式：設為文字格式（@）。
+	•	重複檢查：從 C4 開始檢查，會在最右邊新增一欄標示「重複」，並標紅字。
+	•	處理完會產生一個新的 _checked.xlsx 檔案，不覆蓋原檔。
 
-
-
-
-接下來我要做這個步驟
-字體顏色統一	全資料區	除了正紅字外，其他字體顏色全部改成黑色
-CustomerNo 欄位格式	C欄	將 C 欄設為文字格式
-CustomerNo 是否重複	C欄	用 CountIf 檢查 C4 到最後一列，若 CustomerNo 重複則標示
-
+下一步你想做什麼？ 例如：
+	•	繼續加其他檢核規則
+	•	把重複標示改成條件格式（Conditional Formatting）
+	•	在 Log 裡記錄總共有幾筆重複
+	•	其他欄位的檢查邏輯
+告訴我下一階段的需求，我繼續幫你擴充！
