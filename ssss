@@ -1,11 +1,113 @@
-好的，直接調整為最精簡、重點突出的版本：
-**主旨：【問題確認】新光資轉補0撞號與Dummy帳號處理**
-Dear Coco,
-新光資轉帳號寫入時發現**補0撞號**問題，對照附圖（image.png）具體狀況如下：
- 1. **異常現象**：EXTN_REF_NO 前置補 0 後，會與另一筆既有帳號 0374508750123 衝突。
- 2. **Dummy帳號**：該撞號資料的開戶日 ADTOPN 為 1900-01-01，研判為 Dummy 帳號。
-**需協助確認：**
- * 轉置寫入時，是否直接**過濾（Pass）**開戶日為 1900-01-01 的 Dummy 帳號？
-再麻煩協助確認，謝謝。
-Best regards,
-[您的名字]
+SELECT CONVERT(CHAR(6), a.createdDate,112 ), count(*)
+FROM MESSAGEDATABASE..SwiftMX_Raw  a
+GROUP BY  CONVERT(CHAR(6), a.createdDate,112 ) order by 1 desc
+
+(沒有資料行名稱) (沒有資料行名稱)
+202606 13514
+202605 12329
+202604 12558
+
+
+SELECT  MessageItemPath ,count(*) FROM SwiftMX_DetectionResult b
+join MESSAGEDATABASE..SwiftMX_Raw a  on b.CaseId = a.id
+where a.bankNo = 'HK' and a.createdDate >='20260601'
+Group By  MessageItemPath order by 2 desc
+
+
+MessageItemPath (沒有資料行名稱)
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm 5953
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm 5710
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm 5656
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine 4114
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine 3096
+
+
+
+SELECT * FROM SwiftMX_MessageItemDetectionSettings WHERE Messageitem = 'Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm'
+UNION 
+SELECT * FROM SwiftMX_MessageItemDetectionSettings WHERE Messageitem = 'Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm'
+UNION 
+SELECT * FROM SwiftMX_MessageItemDetectionSettings WHERE Messageitem = 'Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm'
+UNION 
+SELECT * FROM SwiftMX_MessageItemDetectionSettings WHERE Messageitem = 'Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine'
+UNION 
+SELECT * FROM SwiftMX_MessageItemDetectionSettings WHERE Messageitem = 'Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine'
+
+
+
+
+SourceID MessageType MessageItem Direction IsEnabled IsFreeText BICPartScan NameCategory
+SwiftMXHK pacs.008 Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm I 1 1 0 27
+SwiftMXHK pacs.008 Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm O 1 1 0 27
+SwiftMXHK pacs.008 Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm I 1 1 0 27
+SwiftMXHK pacs.008 Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm O 1 1 0 27
+SwiftMXHK pacs.008 Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm I 1 1 0 27
+SwiftMXHK pacs.008 Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm O 1 1 0 27
+SwiftMXHK pacs.008 Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine I 1 1 0 48
+SwiftMXHK pacs.008 Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine O 1 1 0 48
+SwiftMXHK pacs.008 Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine I 1 1 0 48
+SwiftMXHK pacs.008 Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine O 1 1 0 48
+
+
+
+
+
+SELECT Top 2  a.SdnName, COUNT(*) AS cnt FROM SwiftMX_DetectionResult a
+join MESSAGEDATABASE..SwiftMX_Raw b on a.caseid = b.ID
+WHERE a.MessageItemPath = 'Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm' 
+AND b.bankNo = 'HK' and b.createdDate >='20260601'
+GROUP BY SdnName
+ORDER BY cnt DESC
+
+Technology 428
+Pre 197
+
+
+SELECT Top 2   a.SdnName, COUNT(*) AS cnt FROM SwiftMX_DetectionResult a
+join MESSAGEDATABASE..SwiftMX_Raw b on a.caseid = b.ID
+WHERE a.MessageItemPath =  'Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm'
+AND b.bankNo = 'HK' and b.createdDate >='20260601'
+GROUP BY SdnName
+ORDER BY cnt DESC
+
+Shanghai 1545
+AT MR Bank 1466
+
+
+SELECT Top 2  a.SdnName, COUNT(*) AS cnt FROM SwiftMX_DetectionResult a
+join MESSAGEDATABASE..SwiftMX_Raw b on a.caseid = b.ID
+WHERE a.MessageItemPath = 'Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm'
+AND a.SdnName = 'Technology'
+AND b.bankNo = 'HK' and b.createdDate >='20260601'
+GROUP BY SdnName
+ORDER BY cnt DESC
+
+Technology 298
+
+
+SELECT Top 2  a.SdnName, COUNT(*) AS cnt FROM SwiftMX_DetectionResult a
+join MESSAGEDATABASE..SwiftMX_Raw b on a.caseid = b.ID
+WHERE a.MessageItemPath = 'Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine'
+AND a.SdnName = 'Technology'
+AND b.bankNo = 'HK' and b.createdDate >='20260601'
+GROUP BY SdnName
+ORDER BY cnt DESC
+
+
+Technology 12
+
+
+SELECT Top 2   a.SdnName, COUNT(*) AS cnt FROM SwiftMX_DetectionResult a
+join MESSAGEDATABASE..SwiftMX_Raw b on a.caseid = b.ID
+WHERE a.MessageItemPath =  'Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine'
+AND a.SdnName = 'Technology'
+AND b.bankNo = 'HK' and b.createdDate >='20260601'
+GROUP BY SdnName
+ORDER BY cnt DESC
+
+Technology 4
+
+
+幫我把code 用掉 
+我是要發給別人看結果的
+該table 就幫我用table
