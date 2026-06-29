@@ -8,3 +8,66 @@
 
 
 現在香港問這些問題我要怎麼查
+處理香港（HKWBS系統）拋過來的這幾類異常（明明有帳號、有交易卻帶出 NULL 或判斷錯誤），我們會從 **「資料存在性」** 與 **「過濾條件（排他條件）」** 兩個方向去對著原本的 SQL 下語法排查。
+你可以直接複製下方的**排查指令與對應腳本**來回應或自行檢驗：
+## 1. 針對 681474、682380、682572（有帳戶卻帶出 NULL）
+這三個案子的共通點是「有帳號但沒資料」。既然原 SQL 是用 JOIN 串聯 BSA_SUB_CUST_FACT D，並用 INNER JOIN 擋住 @CustID J，會變 NULL 只有兩種可能：
+ * **核心斷鏈**：該客戶在 PB_CUSTOMER_FACT B 或 BSA_SUB_CUST_FACT D 其中一張表根本不存在。
+ * **左關聯（LEFT JOIN）的表沒資料**：例如沒有對應的風險、PEP 或 EDD 排程。
+### 🔍 排查工具 Code：驗證核心資料斷在哪裡
+```sql
+-- 請把要排查的客戶編號放進來
+DECLARE @CheckID TABLE (CustomerNo VARCHAR(50));
+INSERT INTO @CheckID VALUES ('681474'), ('682380'), ('682572');
+
+SELECT 
+    J.CustomerNo AS 欲查詢編號,
+    CASE WHEN B.CIF_KEY IS NOT NULL THEN 'Y' ELSE 'N (主表無資料!)' END AS [PB_CUSTOMER_FACT存在狀態],
+    CASE WHEN D.CIF_KEY IS NOT NULL THEN 'Y' ELSE 'N (BSA副表無資料!)' END AS [BSA_SUB_CUST_FACT存在狀態],
+    B.CUST_TYPE_CDE AS 客戶類型,
+    B.RecordStatus AS 客戶狀態,
+    D.CoreSystem AS 系統來源
+FROM @CheckID J
+LEFT JOIN BSADBHK..BSA_SUB_CUST_FACT D ON J.CustomerNo = D.CustomerNo
+LEFT JOIN BSADBHK..PB_CUSTOMER_FACT B ON D.CIF_KEY = B.CIF_KEY;
+
+```
+> **💡 查核方針：**
+>  1. 如果上述查出來，某個客戶的「BSA副表」或「主表」是 **N**，說明資料根本沒同步進洗錢防制底表，要通知 ETL 或系統窗口補入資。
+>  2. 如果狀態都是 **Y**，但原報表還是 NULL，請檢查原 SQL 內 A 表的過濾條件 WHERE STATUS <> '3' AND SRC ='HRS'。如果該客戶在工作流的狀態剛好是 '3' (可能已結案)，A 表就會吐出 NULL，這在 LEFT JOIN 下是正常的。
+> 
+## 2. 針對 682683、683497（靜止戶 Dormant 判定錯誤）
+香港反饋「這兩戶在 2025/12/31 以前的 12 個月內有交易，不該變靜止戶」。
+雖然你貼出的 SQL 中，有一行被批註掉了：
+--CASE WHEN K.CUST_ID IS NULL THEN 'Y' ELSE 'N' END '是否久未往來(超過12個月)'
+這代表系統內一定有另一張**交易歷史表**或**靜止戶定義檔**（即原本的 K 表）在控制這個邏輯。
+### 🔍 排查工具 Code：把這兩戶的實際交易抓出來對質
+我們需要去翻動 HKWBS 的帳戶交易明細表（通常是 TXN_HISTORY 或 ACCOUNT_ACTIVITY 類型的表，請依據你們環境實體表名修改），確認 2025 年到底有沒有過有效交易：
+```sql
+-- 驗證 2025 年間客戶到底有沒有過有效交易
+SELECT 
+    D.CustomerNo,
+    A.ACCT_NO       AS 帳號,
+    A.ACCT_STATUS   AS 帳戶狀態,  -- 檢查系統註記是否真的是 Dormant
+    T.TXN_DATE      AS 交易日期,
+    T.TXN_AMT       AS 交易金額,
+    T.TXN_TYPE      AS 交易類型   -- 排除系統自動配息、扣管理費等「非客戶主動交易」
+FROM BSADBHK..BSA_SUB_CUST_FACT D WITH (NOLOCK)
+-- 這裡需換成你們環境的「帳戶主檔」與「交易明細表」
+INNER JOIN BSADBHK..ACCOUNT_MASTER_TABLE A WITH (NOLOCK) ON D.CIF_KEY = A.CIF_KEY
+INNER JOIN BSADBHK..TRANSACTION_HISTORY_TABLE T WITH (NOLOCK) ON A.ACCT_NO = T.ACCT_NO
+WHERE D.CustomerNo IN ('682683', '683497')
+  AND T.TXN_DATE BETWEEN '20250101' AND '20251231'
+ORDER BY D.CustomerNo, T.TXN_DATE DESC;
+
+```
+> **💡 查核方針：**
+>  * **狀況 A（確有交易）：** 如果查出來 2025 年確實有客戶主動發起的交易（如轉帳、臨櫃提存），那代表**靜止戶判定的批次程式（Batch）算錯了**，或者抓取交易的基準日寫死或偏離了。
+>  * **狀況 B（只有特殊交易）：** 檢查那些交易是不是「銀行自動扣帳號管理費」或「定期活存給息」？在防制洗錢定義中，**銀行自動觸發的交易通常不視為「客戶主動交易活動」**，如果是這種情況，香港那邊的認知就需要被修正。
+> 
+## 3. 回覆香港的標準作業流程 (SOP) 建議
+你在查完上述語法後，可以用底下的結構回覆香港：
+ 1. **針對 681474 等 NULL 戶**：
+   * 「經查，該客戶在 PB_CUSTOMER_FACT 主表中 [存在 / 不存在]，其 RecordStatus 目前為 XX。由於 [資料未同步/審查工作流已結案狀態為3]，導致報表帶出 NULL。調整建議為...」
+ 2. **針對 682683 等靜止戶爭議**：
+   * 「調閱 HKWBS 後台交易明細，該客戶在 2025 年間確實有於 2025/XX/XX 進行過一筆金額為 XXXX 的交易，屬於 [客戶主動/銀行自動] 行為。將同步修正 [靜止戶判定邏輯 / 調整 K 表排除條件]。」
