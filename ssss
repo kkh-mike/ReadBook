@@ -1,40 +1,26 @@
-"HK 分行高頻攔截欄位排名 (2026/06/01-2026/06/29)
-統計分析觸發制裁名單掃描的主要 MX 訊息路徑項目："							
-							
-訊息欄位路徑 (MessageItemPath) 	攔截次數						
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm	5,953						
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm	5,710						
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm	5,656						
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine	4,114						
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine 	3,096						
-							
-關鍵攔截欄位之系統檢核設定 (Settings)							
-SourceID	MessageType	MessageItem	Direction	IsEnabled	IsFreeText	BICPartScan	NameCategory
-SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm	I	1	1	0	27
-SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm	O	1	1	0	27
-SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm	I	1	1	0	27
-SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm	O	1	1	0	27
-SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm	I	1	1	0	27
-SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm	O	1	1	0	27
-SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine	I	1	1	0	48
-SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine	O	1	1	0	48
-SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine	I	1	1	0	48
-SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine	O	1	1	0	48
-							
-							
-檢核欄位路徑	命中制裁名單名稱 (SdnName)	命中次數					
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm	Technology	428					
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm	Pre	197					
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm	Shanghai	1,545					
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm	AT MR Bank	1,466					
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm	Technology	298					
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine	Technology	12					
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine	Technology	4					
-							
+你可以用「現象 → 分析 → 初步判斷 → 建議確認事項」的方式回報，讓主管很快理解問題。
 
-例如 : MX 來的 nm =  Hollies Technology limited
-這樣就會被抓到是可疑問題
-因為DJ  名單有 Technology 這個人
-目前看起來setting 都是有做分割字元
-Hollies Technology limited 就會中
-需詢問HK 是否 需要把切割字元關閉
+可以直接發：
+
+目前分析 HK 分行 2026/06/01~2026/06/29 的高頻攔截資料後，發現主要攔截集中於 Name 欄位，例如：
+
+* Cdtr/Nm
+* Dbtr/Nm
+* CdtrAgt/FinInstnId/Nm
+
+進一步比對命中內容後，發現許多案件是因為一般公司名稱中的單字被制裁名單比對命中，例如：
+
+MX：
+Hollies Technology Limited
+
+因 DJ 制裁名單存在 Technology 此名稱，因此系統會將 Technology 切割出來進行比對，造成攔截。
+
+目前檢查 Settings 後，相關 Name 欄位皆已啟用 FreeText 掃描，且看起來有進行字元切割 (Tokenization)，因此像 “Hollies Technology Limited” 仍會命中 “Technology”。
+
+初步判斷，高頻攔截可能與 Name 欄位的切割比對機制有關，而非實際命中完整名稱。
+
+建議確認 HK 是否仍需要維持目前 Name 欄位的切割比對機制，或評估是否可關閉切割字元 (Tokenization)，以降低此類 False Positive。
+
+如果是要在會議上講，可以濃縮成一句：
+
+我分析後發現，目前大量攔截不是因為公司名稱真的在制裁名單，而是 Name 欄位會做字詞切割，例如 Hollies Technology Limited 被切成 Technology，剛好 DJ 名單有這個名稱，因此被攔截。我建議詢問 HK 是否需要維持這個切割機制，或評估關閉 Tokenization，以降低誤判。
