@@ -1,22 +1,65 @@
-這是典型的 false positive 問題，常見於 AML/CFT name screening（尤其是 wire message / 電文掃描）。2011
-「88 Queensway, Hong Kong」這個地址很常見（Pacific Place / Admiralty 的商業大樓），裡面的 “Hong” 直接 substring match 到可疑名單的 “Hong”，導致每次掃到香港地址就 hit。
-短期快速解法（馬上能用）
-	1	加 Suppression / Whitelist / Exception List
-	◦	把 “88 Queensway”、“Pacific Place”、“Hong Kong”（或整個地址 pattern）加進系統的 false positive suppression list 或 good guy list。
-	◦	很多 AML 系統（Actimize、Nice、FICO 等）都有這個功能，可以針對特定字串、地址、或組合 rule 自動 suppress。
-	2	調整 Matching Logic
-	◦	改成 whole word matching 或 token-based matching，不要純 substring。
-	▪	例如 “Hong” 要 match 完整 token（不是 “Hong Kong” 裡的子字串）。
-	◦	加 context filter：如果 hit 只來自地址欄位（address field），且 name field 沒有 match，就降低分數或 auto-clear。
-	3	Country / Jurisdiction Whitelist
-	◦	香港是低風險/熟悉 jurisdiction，把 “Hong Kong” 相關字串在 address screening 裡設為 low priority 或 exclude common terms。
-中長期改善（建議你寫在 maintenance proposal 裡）
-	•	Fuzzy Matching 調優 + Threshold：提高 similarity threshold（例如 85% 以上才算 hit），或加 secondary identifiers（DOB、passport、full address match）。
-	•	Address Normalization：掃描前先 standardize address（把 “Hong Kong” 拆成 country field），避免 name screening 吃到 address。
-	•	Rule Tuning / Back-testing：用歷史 false hit 資料跑 test，調整 rule 減少 noise。HKMA 也鼓勵用 statistical methods 優化 false positive rate。18
-	•	ML / AI 輔助：如果系統支援，導入 contextual scoring（看整個 transaction context，而不只單一 keyword）。
-實務建議（你工作上常做的）
-	•	先記錄這筆 false hit：把 address、hit reason、可疑名單的 “Hong” 詳細 log 下來，作為 tuning 證據。
-	•	Email 給同事 / 貫軒 時可以用自然英文： “We are getting repeated false positives on wire messages containing the address ‘88 Queensway, Hong Kong’ (Pacific Place). This is triggering due to substring match on ‘Hong’ from the watchlist. Suggest adding it to the suppression list or refining the matching logic to whole-word / address-aware rules to reduce noise.” 
-如果你能提供更多細節（用的是哪套 screening system？是 name screening 還是 address screening？matching rule 是 substring / Levenshtein / phonetic？），我可以給更精準的 SQL / config 建議。
-需要我幫你 draft 完整的 investigation note 或 proposal 段落嗎？
+SELECT
+'PART1' Report, 
+B.CUST_TYPE_CDE AS '客戶類型',
+B.CUSTOMER_SEGMENT AS '客戶群體',
+'_'+ D.CUSTOMERNO AS 'CUSTOMERNO',
+'_' + ISNULL(A.QUEUENAME,'') AS 'RM_工作群組',
+B.CUST_NME AS '姓名1',
+B.NATIVE_CUST_NME AS '姓名2',
+'_'+ B.BRNCH_NBR AS '所屬分行',
+CONVERT(CHAR(8),E.ReviewDt,112) 下次審核日期,
+D.HIGHRISK 風險等級,
+D.RISKSCORE 風險分數,
+F.PEP as PEP,
+F.ForeignPEP AS ForeignPEP,
+F.LocalPEP AS LocalPEP,
+F.ForeignOrgPEP AS ForeignOrgPEP,
+F.ExPEP AS ExPEP,
+F.CustRPIsPEP AS RCA,
+F.BlackList AS BlackList,
+F.NN as NegativeNews,
+CONVERT(CHAR(8),B.OPEN_DTE,112) 開戶日期,ISNULL(B.NATIONALITY_1,'') NATIONALITY,
+CASE WHEN B.CUST_TYPE_CDE ='P' THEN D.OCCUP + '_' + RTRIM(G.OCCUPDESC) ELSE '' END OCCUP,
+ISNULL(B.NAICS_CDE,'')  + '_' + RTRIM(I.Description) '行業別',
+--ISNULL(J.INVST_AMT,0) AS AUM,
+--CASE WHEN K.CUST_ID IS NULL THEN 'N' ELSE 'Y' END '是否久未往來(超過12個月)',
+b.RecordStatus 客戶狀態, 
+CASE WHEN ISNULL(D.OBUFlag,'') <>'Y' THEN 'N' ELSE D.OBUFlag END OBUFlag, D.CoreSystem 系統來源, B.REM_CDE 'AO_CODE', B.REM_NME 'AO_NAME'
+FROM BSADBHK..PB_CUSTOMER_FACT B WITH (NOLOCK)
+LEFT JOIN
+(
+SELECT A.BATCHID,A.CIF_KEY,A.STATUS,B.QUEUENAME FROM  BSADBHK..HRS_CUST_RISK_MGMT A WITH (NOLOCK)
+INNER JOIN BSADBHK..WORKFLOW_MGMT_QUEUE B WITH (NOLOCK) ON A.QUEUEID = B.QUEUEID
+WHERE STATUS <> '3' AND SRC ='HRS' 
+) A ON B.CIF_KEY = A.CIF_KEY
+JOIN BSADBHK..BSA_SUB_CUST_FACT D WITH (NOLOCK) ON B.CIF_KEY = D.CIF_KEY
+LEFT JOIN (
+  SELECT C.CIFKEY,C.ReviewDt FROM BSADBHK..EDD_ReviewSchedule C WITH (NOLOCK) 
+  INNER JOIN (
+      SELECT CIFKEY,MIN(ReviewDt) ReviewDt FROM BSADBHK..EDD_ReviewSchedule WITH (NOLOCK) WHERE STATUS ='P'
+      GROUP BY CIFKEY) C2 ON C.CIFKey = C2.CIFKey  AND C.ReviewDt = C2.ReviewDt
+ )  E ON B.CIF_KEY = E.CIFKEY
+LEFT JOIN (
+SELECT CIF_KEY,IsBearerShares,
+CASE WHEN PEPBitwiseCode & 1=1 THEN 'Y' ELSE 'N' END BlackList,
+CASE WHEN PEPBitwiseCode & 2=2 THEN 'Y' ELSE 'N' END PEP,
+CASE WHEN PEPBitwiseCode & 8=8 THEN 'Y' ELSE 'N' END ForeignPEP,
+CASE WHEN PEPBitwiseCode & 16=16 THEN 'Y' ELSE 'N' END LocalPEP,
+CASE WHEN PEPBitwiseCode & 32=32 THEN 'Y' ELSE 'N' END ForeignOrgPEP,
+CASE WHEN PEPBitwiseCode & 64=64 THEN 'Y' ELSE 'N' END ExPEP,
+CASE WHEN PEPBitwiseCode & 128=128 THEN 'Y' ELSE 'N' END CustRPIsPEP ,
+CASE WHEN PEPBitwiseCode & 4=4 THEN 'Y' ELSE 'N' END NN
+FROM BSADBHK..BSA_SUB_CUST_FACT_Extension
+ ) F ON B.CIF_KEY = F.CIF_KEY
+ LEFT JOIN BSADBHK..OCCUPATION_DIM G ON D.OCCUP = G.OCCUPCD 
+ LEFT JOIN BSADBHK..JobTitle_DIM H ON D.JobTitle = H.ID
+ LEFT JOIN BSADBHK..FINCEN_NAICS_DIM I ON B.NAICS_CDE = I.NAICS_Code
+ JOIN @CustID J ON D.CustomerNo = J.CustomerNo
+
+
+
+
+
+幫我拆開來變成一個工具
+table 查什麼 然後什麼跟什麼串再一起是查什麼資料
+我需要整理一個工具
