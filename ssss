@@ -1,112 +1,40 @@
-Swift MX 交易與制裁名單攔截數據分析報告
-統計範圍：2026年06月 (含歷史趨勢與HK分行細項分析)
-1. 歷史每月交易總量趨勢 (SwiftMX_Raw)
-交易月份 (YYYYMM) 總交易筆數
-202606 13,514
-202605 12,329
-202604 12,558
-2. HK 分行高頻攔截欄位排名 (2026/06/01 起)
-統計分析觸發制裁名單掃描的主要 MX 訊息路徑項目：
-訊息欄位路徑 (MessageItemPath) 攔截次數
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm 5,953
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm 5,710
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm 5,656
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine 4,114
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine 3,096
-3. 關鍵攔截欄位之系統檢核設定 (Settings)
-來源系
-統
-訊息電
-文 檢核欄位路徑 方
-向
-啟
-用
-自由文
-字
-BIC掃
-描
-類別代
-碼
-SwiftM
-XHK
-pacs.
-008
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/
-Cdtr/Nm I 1 1 0 27
-SwiftM
-XHK
-pacs.
-008
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/
-Cdtr/Nm O 1 1 0 27
-SwiftM
-XHK
-pacs.
-008
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/
-CdtrAgt/FinInstnId/Nm I 1 1 0 27
-SwiftM
-XHK
-pacs.
-008
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/
-CdtrAgt/FinInstnId/Nm O 1 1 0 27
-SwiftM
-XHK
-pacs.
-008
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/
-Dbtr/Nm I 1 1 0 27
-來源系
-統
-訊息電
-文 檢核欄位路徑 方
-向
-啟
-用
-自由文
-字
-BIC掃
-描
-類別代
-碼
-SwiftM
-XHK
-pacs.
-008
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/
-Dbtr/Nm O 1 1 0 27
-SwiftM
-XHK
-pacs.
-008
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/
-Dbtr/PstlAdr/AdrLine I 1 1 0 48
-SwiftM
-XHK
-pacs.
-008
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/
-Dbtr/PstlAdr/AdrLine O 1 1 0 48
-SwiftM
-XHK
-pacs.
-008
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/
-Cdtr/PstlAdr/AdrLine I 1 1 0 48
-SwiftM
-XHK
-pacs.
-008
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/
-Cdtr/PstlAdr/AdrLine O 1 1 0 48
-4. 各欄位主要命中的名單對象統計 (Top SDN Hits)
-4
-檢核欄位路徑 命中制裁名單名稱 (SdnName) 命中次數
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm Technology 428
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm Pre 197
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm Shanghai 1,545
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm AT MR Bank 1,466
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm Technology 298
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine Technology 12
-Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine Technology 
+"HK 分行高頻攔截欄位排名 (2026/06/01-2026/06/29)
+統計分析觸發制裁名單掃描的主要 MX 訊息路徑項目："							
+							
+訊息欄位路徑 (MessageItemPath) 	攔截次數						
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm	5,953						
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm	5,710						
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm	5,656						
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine	4,114						
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine 	3,096						
+							
+關鍵攔截欄位之系統檢核設定 (Settings)							
+SourceID	MessageType	MessageItem	Direction	IsEnabled	IsFreeText	BICPartScan	NameCategory
+SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm	I	1	1	0	27
+SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm	O	1	1	0	27
+SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm	I	1	1	0	27
+SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm	O	1	1	0	27
+SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm	I	1	1	0	27
+SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm	O	1	1	0	27
+SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine	I	1	1	0	48
+SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine	O	1	1	0	48
+SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine	I	1	1	0	48
+SwiftMXHK	pacs.008	Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine	O	1	1	0	48
+							
+							
+檢核欄位路徑	命中制裁名單名稱 (SdnName)	命中次數					
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm	Technology	428					
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/Nm	Pre	197					
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm	Shanghai	1,545					
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/CdtrAgt/FinInstnId/Nm	AT MR Bank	1,466					
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/Nm	Technology	298					
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Dbtr/PstlAdr/AdrLine	Technology	12					
+Document/FIToFICstmrCdtTrf/CdtTrfTxInf/Cdtr/PstlAdr/AdrLine	Technology	4					
+							
+
+例如 : MX 來的 nm =  Hollies Technology limited
+這樣就會被抓到是可疑問題
+因為DJ  名單有 Technology 這個人
+目前看起來setting 都是有做分割字元
+Hollies Technology limited 就會中
+需詢問HK 是否 需要把切割字元關閉
