@@ -1,12 +1,18 @@
-Dear Pey Shi,
-Regarding the 12 accounts to be clarified, here is the status update from our end:
- 6 Accounts (Closed / No Transfer):
- Account Nos: 681474, 682380, 682572, 682683, 683197, 683497
- Status: Confirmed as Closed (Dormant). These will NOT be transferred to TSHK.
- 6 Accounts (Active / Risk Rating Missing):
- Account Nos: 680130, 681188, 681222, 681812, 682331, 683176
- Status: These are active accounts, but their risk ratings currently show as NULL in the system.
- Action needed: Should we contact the Business Unit (RM) to initiate the CRA questionnaire and update the risk ratings?
-Please let us know your instructions.
-Best regards,
-Michael
+[‎2026/‎6/‎30 上午 10:18]  
+In addition, regarding the AML False Hit issue, Mannok sent you an email on June 25 to ask about it.
+I have done some investigation on my side and found that the false hit appears to be related to character splitting when the MX message is received.
+For example, MX sends “Hollies Technology Limited.”
+Since “Technology” exists as a name on the DJ sanctions list, the system splits out “Technology” for screening, which then triggers the alert.
+As I understand it, the decision on whether to enable character splitting was originally made by HK. Are you familiar with this setting? If not, could you let me know who I should speak with to discuss this further?
+Thank you. 
+ 
+
+他回我
+[‎2026/‎6/‎30 上午 11:26]  
+i think the false hits probably related to weak alias or splitting, which are also faced in Head Office.  
+ 
+
+
+那我是想跟他說
+我先把我們查到的狀況pass 出來給您?
+還是 給Mannok Lam  還是 Joanna Chow  來討論這件事會比較好?
