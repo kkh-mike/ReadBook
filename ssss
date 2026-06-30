@@ -1,18 +1,5 @@
-[‎2026/‎6/‎30 上午 10:18]  
-In addition, regarding the AML False Hit issue, Mannok sent you an email on June 25 to ask about it.
-I have done some investigation on my side and found that the false hit appears to be related to character splitting when the MX message is received.
-For example, MX sends “Hollies Technology Limited.”
-Since “Technology” exists as a name on the DJ sanctions list, the system splits out “Technology” for screening, which then triggers the alert.
-As I understand it, the decision on whether to enable character splitting was originally made by HK. Are you familiar with this setting? If not, could you let me know who I should speak with to discuss this further?
-Thank you. 
- 
+Thanks for the information. I’ll share what we’ve found with you first.
 
-他回我
-[‎2026/‎6/‎30 上午 11:26]  
-i think the false hits probably related to weak alias or splitting, which are also faced in Head Office.  
- 
+Do you think it would be better to discuss this with Mannok Lam or Joanna Chow?
 
-
-那我是想跟他說
-我先把我們查到的狀況pass 出來給您?
-還是 給Mannok Lam  還是 Joanna Chow  來討論這件事會比較好?
+Really appreciate your help. Thanks for your hard w
