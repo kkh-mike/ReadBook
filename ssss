@@ -1,26 +1,12 @@
-你可以用「現象 → 分析 → 初步判斷 → 建議確認事項」的方式回報，讓主管很快理解問題。
-
-可以直接發：
-
-目前分析 HK 分行 2026/06/01~2026/06/29 的高頻攔截資料後，發現主要攔截集中於 Name 欄位，例如：
-
-* Cdtr/Nm
-* Dbtr/Nm
-* CdtrAgt/FinInstnId/Nm
-
-進一步比對命中內容後，發現許多案件是因為一般公司名稱中的單字被制裁名單比對命中，例如：
-
-MX：
-Hollies Technology Limited
-
-因 DJ 制裁名單存在 Technology 此名稱，因此系統會將 Technology 切割出來進行比對，造成攔截。
-
-目前檢查 Settings 後，相關 Name 欄位皆已啟用 FreeText 掃描，且看起來有進行字元切割 (Tokenization)，因此像 “Hollies Technology Limited” 仍會命中 “Technology”。
-
-初步判斷，高頻攔截可能與 Name 欄位的切割比對機制有關，而非實際命中完整名稱。
-
-建議確認 HK 是否仍需要維持目前 Name 欄位的切割比對機制，或評估是否可關閉切割字元 (Tokenization)，以降低此類 False Positive。
-
-如果是要在會議上講，可以濃縮成一句：
-
-我分析後發現，目前大量攔截不是因為公司名稱真的在制裁名單，而是 Name 欄位會做字詞切割，例如 Hollies Technology Limited 被切成 Technology，剛好 DJ 名單有這個名稱，因此被攔截。我建議詢問 HK 是否需要維持這個切割機制，或評估關閉 Tokenization，以降低誤判。
+Dear Pey Shi,
+Regarding the 12 accounts to be clarified, here is the status update from our end:
+ 6 Accounts (Closed / No Transfer):
+ Account Nos: 681474, 682380, 682572, 682683, 683197, 683497
+ Status: Confirmed as Closed (Dormant). These will NOT be transferred to TSHK.
+ 6 Accounts (Active / Risk Rating Missing):
+ Account Nos: 680130, 681188, 681222, 681812, 682331, 683176
+ Status: These are active accounts, but their risk ratings currently show as NULL in the system.
+ Action needed: Should we contact the Business Unit (RM) to initiate the CRA questionnaire and update the risk ratings?
+Please let us know your instructions.
+Best regards,
+Michael
